@@ -10,8 +10,7 @@ import { PotAmount, PotTimer } from "@/components/PotPanel";
 import { PotDrops } from "@/components/PotDrops";
 import { TradeTape } from "@/components/TradeTape";
 
-// Placeholder until the X/Twitter account for this version exists.
-const X_URL = "#";
+const X_URL = "https://x.com/lbwrobinhood";
 
 export default function Home() {
   const data = useIndexer();
