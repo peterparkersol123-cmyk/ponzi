@@ -49,6 +49,7 @@ export const jackpotWritesAbi = parseAbi([
   "function settle()",
   "function deadline() view returns (uint256)",
   "function lastBuyer() view returns (address)",
+  "function prizePool() view returns (uint256)",
 ]);
 
 // ---------------------------------------------------------------- ERC20

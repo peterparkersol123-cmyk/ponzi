@@ -19,6 +19,9 @@ export interface ChainState {
   dexed: boolean;
   /** null until the indexer's first successful price-feed fetch */
   ethUsd: number | null;
+  /** USD a buy must be worth right now to qualify as last buyer; null until
+   *  the price feed is up. Rises in $20 steps as the pot crosses each $100. */
+  minBuyUsd: number | null;
 }
 
 export interface Trade {

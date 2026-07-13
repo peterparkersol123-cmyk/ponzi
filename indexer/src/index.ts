@@ -1,6 +1,7 @@
 import {
   createPublicClient,
   decodeEventLog,
+  formatEther,
   http,
   toEventSelector,
   webSocket,
@@ -11,6 +12,8 @@ import {
 import { WebSocketServer, WebSocket } from "ws";
 import { jackpotEvents, jackpotReadsAbi, portalEvents, portalReadsAbi, transferEvent } from "./abi.js";
 import { openDb, Store, type TradeRow, type PayoutRow } from "./db.js";
+import { startEthUsdPoller } from "./ethUsd.js";
+import { minQualifyingBuyUsd } from "./qualify.js";
 
 // ---------------------------------------------------------------- config
 
@@ -76,27 +79,16 @@ interface ChainState {
   progress: string; // 0..1e18 toward DEX migration
   dexed: boolean;
   ethUsd: number | null;
+  /** USD a buy must be worth right now to reset the countdown / qualify as
+   *  last buyer (see qualify.ts) — null until the ETH/USD feed is up. */
+  minBuyUsd: number | null;
 }
 
 let chainState: ChainState | null = null;
 
-// ---------------------------------------------------------------- ETH/USD price
-// Native token is ETH, so USD display needs an external price feed. Refreshed
-// on its own slow interval (price doesn't need per-second freshness) — a
-// failed fetch just keeps the last known good value instead of breaking state.
-
-let ethUsdPrice: number | null = null;
-const ETH_PRICE_POLL_MS = 60_000;
-
-async function refreshEthUsdPrice(): Promise<void> {
-  try {
-    const res = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=ethereum&vs_currencies=usd");
-    const json = (await res.json()) as { ethereum?: { usd?: number } };
-    if (typeof json.ethereum?.usd === "number") ethUsdPrice = json.ethereum.usd;
-  } catch (err) {
-    console.error("eth/usd price fetch failed:", err);
-  }
-}
+// Native token is ETH, so USD display (and the qualifying-buy threshold)
+// needs an external price feed — shared with the keeper via ethUsd.ts.
+const getEthUsd = startEthUsdPoller();
 
 async function refreshChainState(): Promise<ChainState> {
   const j = { address: JACKPOT, abi: jackpotReadsAbi } as const;
@@ -108,6 +100,8 @@ async function refreshChainState(): Promise<ChainState> {
     httpClient.readContract({ ...j, functionName: "roundId" }),
     httpClient.readContract({ address: PORTAL, abi: portalReadsAbi, functionName: "getTokenV8Safe", args: [TOKEN] }),
   ]);
+  const ethUsd = getEthUsd();
+  const potUsd = ethUsd != null ? Number(formatEther(prizePool)) * ethUsd : null;
   chainState = {
     prizePool: prizePool.toString(),
     opsAccrued: opsAccrued.toString(),
@@ -121,7 +115,8 @@ async function refreshChainState(): Promise<ChainState> {
     reserve: tokenState.reserve.toString(),
     progress: tokenState.progress.toString(),
     dexed: tokenState.status === 4,
-    ethUsd: ethUsdPrice,
+    ethUsd,
+    minBuyUsd: potUsd != null ? minQualifyingBuyUsd(potUsd) : null,
   };
   return chainState;
 }
@@ -337,7 +332,6 @@ function watch() {
 // ---------------------------------------------------------------- main
 
 async function main() {
-  await refreshEthUsdPrice();
   await refreshChainState();
 
   // Live tracking + periodic broadcasts start immediately — they must NOT
@@ -356,7 +350,6 @@ async function main() {
       console.error("state poll failed:", err);
     }
   }, STATE_POLL_MS);
-  setInterval(refreshEthUsdPrice, ETH_PRICE_POLL_MS);
 
   // Historical backfill fills in past trades/leaderboard in the background.
   backfill()

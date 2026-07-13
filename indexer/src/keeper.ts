@@ -2,6 +2,7 @@ import {
   createPublicClient,
   createWalletClient,
   defineChain,
+  formatEther,
   http,
   webSocket,
   type Log,
@@ -9,6 +10,8 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { jackpotWritesAbi, portalEvents, transferEvent } from "./abi.js";
+import { startEthUsdPoller } from "./ethUsd.js";
+import { minQualifyingBuyUsd } from "./qualify.js";
 
 /// The keeper is the game's referee. It watches Flap's Portal for buys of the
 /// token and records the latest buyer on-chain (resetting the 60s countdown),
@@ -50,6 +53,7 @@ const streamClient: PublicClient = WS_RPC_URL
   ? createPublicClient({ chain, transport: webSocket(WS_RPC_URL) })
   : publicClient;
 const wallet = createWalletClient({ account, chain, transport: http(RPC_URL) });
+const getEthUsd = startEthUsdPoller();
 
 // Serialize writes so nonces never collide (recordBuy vs settle).
 let queue: Promise<void> = Promise.resolve();
@@ -78,16 +82,23 @@ async function settle() {
   console.log(`settle() — ${hash}`);
 }
 
-/// Only the last buy in a batch matters (earlier resets are overwritten), so
-/// collapse to the final one per poll to save gas. The recorded buyer is
-/// resolved from the token's own Transfer trail in that buy's transaction,
-/// NOT Portal's reported `buyer` field — aggregators/routers (GMGN, etc.)
-/// often call Portal themselves and forward the tokens on to the real trader
-/// within the same tx, so the router would otherwise get credited (and then
-/// fail the on-chain `must hold the token` check, since it no longer does).
-/// The LAST Transfer of the token in that tx is the address that's actually,
-/// verifiably holding it afterward.
-function handleBuys(logs: Log[]) {
+/// Only the last QUALIFYING buy in a batch matters (earlier resets are
+/// overwritten anyway), so collapse to that one per poll to save gas. A buy
+/// "qualifies" if its ETH value converts to at least minQualifyingBuyUsd()
+/// of the pot's current USD value (see qualify.ts) — smaller buys still
+/// trade fine and still pay tax into the pot, they just don't reset the
+/// countdown or make the buyer eligible. If the ETH/USD feed is temporarily
+/// unavailable, or the on-chain pot read fails, we fail OPEN (record the
+/// last buy unchecked) rather than let a price-feed hiccup halt the game.
+///
+/// The recorded buyer is resolved from the token's own Transfer trail in
+/// that buy's transaction, NOT Portal's reported `buyer` field —
+/// aggregators/routers (GMGN, etc.) often call Portal themselves and forward
+/// the tokens on to the real trader within the same tx, so the router would
+/// otherwise get credited (and then fail the on-chain `must hold the token`
+/// check, since it no longer does). The LAST Transfer of the token in that
+/// tx is the address that's actually, verifiably holding it afterward.
+async function handleBuys(logs: Log[]) {
   type Named = Log & { eventName?: string; address: `0x${string}`; args: Record<string, unknown> };
   const named = logs as Named[];
 
@@ -95,7 +106,35 @@ function handleBuys(logs: Log[]) {
     (l) => l.eventName === "TokenBought" && (l.args.token as string)?.toLowerCase() === TOKEN,
   );
   if (buys.length === 0) return;
-  const lastBuyTx = buys[buys.length - 1].transactionHash;
+
+  let qualifying = buys;
+  const ethUsd = getEthUsd();
+
+  if (ethUsd == null) {
+    console.log("eth/usd price unavailable — recording last buy this batch unchecked");
+  } else {
+    try {
+      const prizePool = await publicClient.readContract({
+        address: JACKPOT,
+        abi: jackpotWritesAbi,
+        functionName: "prizePool",
+      });
+      const potUsd = Number(formatEther(prizePool)) * ethUsd;
+      const minUsd = minQualifyingBuyUsd(potUsd);
+      qualifying = buys.filter((b) => Number(formatEther(b.args.eth as bigint)) * ethUsd >= minUsd);
+      if (qualifying.length === 0) {
+        console.log(
+          `no buy in this batch met the $${minUsd} qualifying threshold (pot ≈ $${potUsd.toFixed(2)}), skipping`,
+        );
+        return;
+      }
+    } catch (err) {
+      console.error("qualifying-threshold check failed, recording last buy unchecked:", err);
+      qualifying = buys;
+    }
+  }
+
+  const lastBuyTx = qualifying[qualifying.length - 1].transactionHash;
 
   const transfers = named.filter(
     (l) => l.eventName === "Transfer" && l.address.toLowerCase() === TOKEN && l.transactionHash === lastBuyTx,
@@ -132,7 +171,7 @@ async function main() {
   streamClient.watchEvent({
     address: [PORTAL, TOKEN],
     events: [portalEvents.TokenBought, transferEvent],
-    onLogs: (logs) => handleBuys(logs as Log[]),
+    onLogs: async (logs) => handleBuys(logs as Log[]),
     onError: (err) => console.error("buy stream error:", err),
   });
 

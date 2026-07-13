@@ -31,6 +31,23 @@ export function fmtUsdCompact(wei: string | bigint, ethUsd: number): string {
   return `$${usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
 }
 
+/** Format a wei string as a USD unit price, given a live ETH/USD rate. Unlike
+ *  fmtUsdCompact (built for totals like market cap), this keeps enough
+ *  decimal places for sub-cent per-token prices instead of rounding them to
+ *  "$0.0000" — these bonding-curve tokens routinely price in the
+ *  $0.000001-ish range early on. */
+export function fmtUsdPrice(wei: string | bigint, ethUsd: number): string {
+  const usd = Number(formatEther(BigInt(wei))) * ethUsd;
+  if (usd === 0) return "$0";
+  if (usd >= 1) return `$${usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  if (usd >= 0.01) return `$${usd.toFixed(4)}`;
+  // Sub-cent: keep ~3 significant figures in fixed notation (not scientific)
+  // so it still reads at a glance in a compact stat card.
+  const leadingZeros = Math.max(0, -Math.floor(Math.log10(usd)) - 1);
+  const decimals = Math.min(leadingZeros + 3, 12);
+  return `$${usd.toFixed(decimals)}`;
+}
+
 /** Format a token-wei string as a whole-ish token amount. */
 export function fmtTokens(wei: string | bigint): string {
   const n = Number(formatEther(BigInt(wei)));

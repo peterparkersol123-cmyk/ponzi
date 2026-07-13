@@ -1,6 +1,6 @@
 "use client";
 
-import { fmtEth, fmtEthCompact, fmtUsdCompact } from "@/lib/format";
+import { fmtEth, fmtEthCompact, fmtUsdCompact, fmtUsdPrice } from "@/lib/format";
 import type { ChainState } from "@/lib/useIndexer";
 
 /** USD when the price feed is up, ETH-compact fallback when it's not. */
@@ -8,10 +8,16 @@ function fmtMoney(wei: string, ethUsd: number | null | undefined): string {
   return ethUsd != null ? fmtUsdCompact(wei, ethUsd) : `${fmtEthCompact(wei)} ETH`;
 }
 
+/** Same fallback rule as fmtMoney, but for a per-token unit price rather
+ *  than a total — keeps sub-cent precision instead of rounding to zero. */
+function fmtPrice(wei: string, ethUsd: number | null | undefined): string {
+  return ethUsd != null ? fmtUsdPrice(wei, ethUsd) : `${fmtEth(wei, 10)} ETH`;
+}
+
 export function StatsBar({ state, hourlyVolume }: { state: ChainState | null; hourlyVolume: string }) {
   const stats: [string, string, string][] = [
     ["💰", "market cap", state ? fmtMoney(state.marketCap, state.ethUsd) : "—"],
-    ["🏷️", "price", state ? `${fmtEth(state.price, 10)} ETH` : "—"],
+    ["🏷️", "price", state ? fmtPrice(state.price, state.ethUsd) : "—"],
     ["🧑‍🤝‍🧑", "holders", state ? String(state.holders) : "—"],
     ["📈", "1h volume", fmtMoney(hourlyVolume, state?.ethUsd)],
   ];

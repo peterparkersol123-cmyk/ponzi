@@ -9,8 +9,8 @@ import { readFile } from "node:fs/promises";
 const IMAGE_PATH = "/Users/aske/Downloads/RH.png";
 const CREATOR = "0xb267b6ec60d1ef728463629ac236a395225858f0";
 const DESCRIPTION = "TEST RUN";
-const WEBSITE = null;
-const TWITTER = null;
+const WEBSITE = "https://google.com";
+const TWITTER = "https://x.com";
 const TELEGRAM = null;
 
 const MUTATION = `

@@ -84,6 +84,16 @@ export function PotPanel({ state, now }: { state: ChainState | null; now: number
             {state ? fmtEth(state.prizePool) : "—"}
             <span className="ml-1 align-top text-xl text-cream">ETH</span>
           </div>
+          {state?.minBuyUsd != null && (
+            <div className="mt-2 inline-flex flex-col items-center gap-0.5">
+              <span className="rounded-full border-2 border-tangerine bg-tangerine/10 px-3 py-1 font-display text-xs font-extrabold tabular-nums text-tangerine">
+                🔥 min buy to qualify: ${state.minBuyUsd.toLocaleString("en-US")}
+              </span>
+              <span className="text-[10px] font-semibold text-cream/40">
+                rises as the pot grows
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="relative mx-auto grid h-48 w-48 place-items-center">
