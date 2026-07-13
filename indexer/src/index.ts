@@ -381,7 +381,16 @@ function watch() {
 // ---------------------------------------------------------------- main
 
 async function main() {
-  await refreshChainState();
+  // A transient RPC failure here (rate limit, node hiccup) must not crash
+  // the whole process — that's what turned one rate-limit response into a
+  // crash-restart-crash loop, since a fresh process immediately retries the
+  // same call into the same still-active rate limit window. The periodic
+  // poll below will pick chainState up as soon as the RPC recovers.
+  try {
+    await refreshChainState();
+  } catch (err) {
+    console.error("initial state fetch failed, will retry on next poll:", err);
+  }
 
   // Live tracking + periodic broadcasts start immediately — they must NOT
   // wait on backfill. On a fast chain a large backlog can take minutes to
