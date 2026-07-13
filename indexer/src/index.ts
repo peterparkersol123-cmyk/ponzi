@@ -25,7 +25,9 @@ const JACKPOT = required("JACKPOT_ADDRESS").toLowerCase() as `0x${string}`;
 const START_BLOCK = BigInt(process.env.START_BLOCK ?? "0");
 const PORT = Number(process.env.PORT ?? 8787);
 const DB_PATH = process.env.DB_PATH ?? "./jackpot.db";
-const BACKFILL_CHUNK = 5_000n;
+// Alchemy's free tier caps eth_getLogs at a 10-block range; a paid plan (or a
+// provider without that cap) can raise this via BACKFILL_CHUNK.
+const BACKFILL_CHUNK = BigInt(process.env.BACKFILL_CHUNK ?? "10");
 const STATE_POLL_MS = 1_000;
 // Without WS_RPC_URL, watchEvent falls back to HTTP polling at viem's default
 // ~4s interval — too slow for a 60s round timer. 1s is the fastest useful
