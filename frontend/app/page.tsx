@@ -5,15 +5,13 @@ import { useIndexer, useNow } from "@/lib/useIndexer";
 import { TOKEN_ADDRESS, explorerUrl } from "@/lib/config";
 import { CopyAddress } from "@/components/CopyAddress";
 import { HowItWorks } from "@/components/HowItWorks";
-import { Leaderboard } from "@/components/Leaderboard";
-import { Logo } from "@/components/Logo";
-import { MinBuyExample } from "@/components/MinBuyExample";
 import { PayoutHistory } from "@/components/PayoutHistory";
+import { PotAmount, PotTimer } from "@/components/PotPanel";
 import { PotDrops } from "@/components/PotDrops";
-import { PotPanel } from "@/components/PotPanel";
-import { StatsBar } from "@/components/StatsBar";
 import { TradeTape } from "@/components/TradeTape";
-import { XFeed } from "@/components/XFeed";
+
+// Placeholder until the X/Twitter account for this version exists.
+const X_URL = "#";
 
 export default function Home() {
   const data = useIndexer();
@@ -21,80 +19,55 @@ export default function Home() {
   const potRef = useRef<HTMLDivElement>(null);
 
   return (
-    <main className="mx-auto max-w-[1500px] space-y-5 px-4 py-6">
+    <main className="mx-auto max-w-[1200px] space-y-10 px-6 py-10">
       <PotDrops trades={data.trades} targetRef={potRef} />
 
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="grid h-11 w-11 place-items-center rounded-2xl border-[3px] border-ink bg-hotpot shadow-[3px_3px_0_0_var(--ink)]">
-            <Logo className="h-7 w-7 text-ink" />
-          </div>
-          <div>
-            <h1 className="font-display text-3xl font-extrabold uppercase leading-none tracking-tight text-cream">
-              Hotpot
-            </h1>
-            <div className="mt-1 flex items-center gap-2">
-              <CopyAddress address={TOKEN_ADDRESS} />
-              <a
-                href={explorerUrl ? `${explorerUrl}/address/${TOKEN_ADDRESS}` : undefined}
-                target="_blank"
-                rel="noreferrer"
-                className="text-xs font-semibold text-cream/50 hover:underline"
-              >
-                on flap ↗
-              </a>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center gap-2 rounded-full border-2 border-ink bg-cream px-3 py-1 text-xs font-bold shadow-[2px_2px_0_0_var(--ink)]">
-          <span
-            className={`inline-block h-2.5 w-2.5 rounded-full ${data.connected ? "bg-berry" : "bg-ink/30"}`}
-          />
-          <span className="text-ink">{data.connected ? "live" : "reconnecting…"}</span>
+      <header className="text-center">
+        <h1 className="font-display text-6xl font-extrabold uppercase leading-none tracking-tight text-ink">
+          LBW
+        </h1>
+        <div className="mt-1 font-display text-lg font-bold italic text-ink">last buyer wins</div>
+        <div className="mt-3 flex items-center justify-center gap-2">
+          <CopyAddress address={TOKEN_ADDRESS} />
+          <a
+            href={explorerUrl ? `${explorerUrl}/address/${TOKEN_ADDRESS}` : undefined}
+            target="_blank"
+            rel="noreferrer"
+            className="text-xs font-semibold text-ink/60 hover:underline"
+          >
+            on flap ↗
+          </a>
         </div>
       </header>
 
-      {/* left column: live feed on top, qualifying-buy example below, each
-          taking half the column's height */}
-      <div className="grid items-stretch gap-5 lg:grid-cols-[320px_1fr]">
-        <div className="flex flex-col gap-5">
-          <div className="h-[280px] lg:h-0 lg:flex-1">
-            <XFeed />
+      {/* pot | timer + last buyers | last winners + how it works */}
+      <div className="grid gap-8 lg:grid-cols-[240px_1fr_320px]">
+        <div className="flex flex-col justify-between gap-8">
+          <div ref={potRef}>
+            <PotAmount state={data.state} />
           </div>
-          <div className="h-[420px] lg:h-0 lg:flex-1">
-            <MinBuyExample />
+
+          <a href={X_URL} target="_blank" rel="noreferrer" aria-label="Follow on X" className="text-ink">
+            <svg viewBox="0 0 24 24" className="h-8 w-8 fill-current">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+          </a>
+        </div>
+
+        <div className="flex flex-col gap-8">
+          <PotTimer state={data.state} now={now} />
+          <div className="h-[500px] lg:mt-12 lg:h-auto lg:flex-1">
+            <TradeTape trades={data.trades} now={now} />
           </div>
         </div>
 
-        <div className="space-y-5">
-          <StatsBar state={data.state} hourlyVolume={data.hourlyVolume} />
-
-          {/* pot in the middle, flanked by the leaderboard and payouts */}
-          <div className="grid items-start gap-5 lg:grid-cols-3">
-            <div className="order-2 lg:order-1">
-              <Leaderboard entries={data.leaderboard} roundId={data.state?.roundId} />
-            </div>
-            <div ref={potRef} className="order-1 lg:order-2">
-              <PotPanel state={data.state} now={now} />
-            </div>
-            <div className="order-3 lg:order-3">
-              <PayoutHistory payouts={data.payouts} now={now} />
-            </div>
-          </div>
-
-          {/* the wide trade tape sits below, with the how-it-works alongside */}
-          <div className="grid gap-5 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              <TradeTape trades={data.trades} now={now} />
-            </div>
-            <div>
-              <HowItWorks />
-            </div>
-          </div>
+        <div className="flex flex-col gap-8">
+          <PayoutHistory payouts={data.payouts} now={now} />
+          <HowItWorks />
         </div>
       </div>
 
-      <footer className="pt-1 text-center text-[11px] font-semibold text-cream/40">
+      <footer className="pt-1 text-center text-[11px] font-semibold text-ink/50">
         no admin keys · settlement is permissionless · you can lose everything you put in
       </footer>
     </main>

@@ -19,9 +19,6 @@ export interface ChainState {
   dexed: boolean;
   /** null until the indexer's first successful price-feed fetch */
   ethUsd: number | null;
-  /** USD a buy must be worth right now to qualify as last buyer; null until
-   *  the price feed is up. Rises in $20 steps as the pot crosses each $100. */
-  minBuyUsd: number | null;
 }
 
 export interface Trade {
@@ -36,10 +33,6 @@ export interface Trade {
   token_amount: string;
   price: string;
   market_cap: string;
-  /** Buys only: did this buy clear the qualifying threshold (see PotPanel's
-   *  "min buy to qualify" badge)? null for sells, or if the price feed was
-   *  down when the buy landed. Visual indicator only. */
-  qualified: boolean | null;
 }
 
 export interface Payout {

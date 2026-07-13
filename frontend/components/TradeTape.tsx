@@ -1,13 +1,13 @@
 "use client";
 
-import { TerminalPanel } from "./TerminalPanel";
+import { FlatPanel } from "./FlatPanel";
 import { explorerUrl } from "@/lib/config";
 import { fmtAge, fmtEth, fmtTokens, shortAddr } from "@/lib/format";
 import type { Trade } from "@/lib/useIndexer";
 
 export function TradeTape({ trades, now }: { trades: Trade[]; now: number }) {
   return (
-    <TerminalPanel title="hotpot / trades / tail -f" bodyClassName="overflow-x-auto p-3.5">
+    <FlatPanel title="Last buyers:">
       {trades.length === 0 && <div className="py-6 text-center text-xs text-cream/40">no trades yet</div>}
       {trades.length > 0 && (
         <table className="w-full whitespace-nowrap text-left font-mono text-[12.5px] tabular-nums">
@@ -35,16 +35,6 @@ export function TradeTape({ trades, now }: { trades: Trade[]; now: number }) {
                     >
                       {buy ? "buy" : "sell"}
                     </span>
-                    {buy && t.qualified === true && (
-                      <span title="qualified as last buyer" className="ml-1 text-hotpot">
-                        ✓
-                      </span>
-                    )}
-                    {buy && t.qualified === false && (
-                      <span title="too small to qualify — still went to the pot" className="ml-1 text-cream/30">
-                        ✗
-                      </span>
-                    )}
                   </td>
                   <td className="py-1 pr-4 text-right font-bold text-cream">{fmtEth(t.eth_amount)}</td>
                   <td className="py-1 pr-4 text-right text-cream/60">{fmtTokens(t.token_amount)}</td>
@@ -67,6 +57,6 @@ export function TradeTape({ trades, now }: { trades: Trade[]; now: number }) {
           </tbody>
         </table>
       )}
-    </TerminalPanel>
+    </FlatPanel>
   );
 }

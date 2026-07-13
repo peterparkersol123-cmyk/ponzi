@@ -1,13 +1,13 @@
 "use client";
 
-import { TerminalPanel } from "./TerminalPanel";
+import { FlatPanel } from "./FlatPanel";
 import { explorerUrl } from "@/lib/config";
 import { fmtAge, fmtEth, shortAddr } from "@/lib/format";
 import type { Payout } from "@/lib/useIndexer";
 
 export function PayoutHistory({ payouts, now }: { payouts: Payout[]; now: number }) {
   return (
-    <TerminalPanel title="hotpot / payouts / history">
+    <FlatPanel title="Last winners:">
       {payouts.length === 0 && <div className="py-6 text-center text-xs text-cream/40">no payouts yet</div>}
       {payouts.length > 0 && (
         <table className="w-full text-left font-mono text-[12.5px] tabular-nums">
@@ -43,6 +43,6 @@ export function PayoutHistory({ payouts, now }: { payouts: Payout[]; now: number
           </tbody>
         </table>
       )}
-    </TerminalPanel>
+    </FlatPanel>
   );
 }

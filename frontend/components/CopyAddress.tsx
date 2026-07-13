@@ -41,9 +41,9 @@ export function CopyAddress({ address }: { address: string }) {
     <button
       onClick={copy}
       title={copied ? "copied!" : address}
-      className="inline-flex items-center gap-1.5 rounded-full border border-cream/15 bg-cream/5 px-2.5 py-1 font-mono text-xs font-semibold text-cream/60 transition-colors hover:border-hotpot hover:text-hotpot"
+      className="inline-flex items-center gap-1.5 rounded-full border border-ink/20 bg-ink/5 px-2.5 py-1 font-mono text-xs font-semibold text-ink/70 transition-colors hover:border-ink hover:text-ink"
     >
-      <span className="text-cream/35">CA</span>
+      <span className="text-ink/45">CA</span>
       <span>{shortAddr(address)}</span>
       <span aria-hidden className="text-[13px] leading-none">
         {copied ? "✓" : "⧉"}

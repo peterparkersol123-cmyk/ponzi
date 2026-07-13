@@ -13,7 +13,6 @@ import { WebSocketServer, WebSocket } from "ws";
 import { jackpotEvents, jackpotReadsAbi, portalEvents, portalReadsAbi, transferEvent } from "./abi.js";
 import { openDb, Store, type TradeRow, type PayoutRow } from "./db.js";
 import { startEthUsdPoller } from "./ethUsd.js";
-import { minQualifyingBuyUsd } from "./qualify.js";
 
 // ---------------------------------------------------------------- config
 
@@ -88,15 +87,12 @@ interface ChainState {
   progress: string; // 0..1e18 toward DEX migration
   dexed: boolean;
   ethUsd: number | null;
-  /** USD a buy must be worth right now to reset the countdown / qualify as
-   *  last buyer (see qualify.ts) — null until the ETH/USD feed is up. */
-  minBuyUsd: number | null;
 }
 
 let chainState: ChainState | null = null;
 
-// Native token is ETH, so USD display (and the qualifying-buy threshold)
-// needs an external price feed — shared with the keeper via ethUsd.ts.
+// Native token is ETH, so USD display needs an external price feed — shared
+// with the keeper via ethUsd.ts.
 const getEthUsd = startEthUsdPoller();
 
 async function refreshChainState(): Promise<ChainState> {
@@ -110,7 +106,6 @@ async function refreshChainState(): Promise<ChainState> {
     httpClient.readContract({ address: PORTAL, abi: portalReadsAbi, functionName: "getTokenV8Safe", args: [TOKEN] }),
   ]);
   const ethUsd = getEthUsd();
-  const potUsd = ethUsd != null ? Number(formatEther(prizePool)) * ethUsd : null;
   chainState = {
     prizePool: prizePool.toString(),
     opsAccrued: opsAccrued.toString(),
@@ -125,7 +120,6 @@ async function refreshChainState(): Promise<ChainState> {
     progress: tokenState.progress.toString(),
     dexed: tokenState.status === 4,
     ethUsd,
-    minBuyUsd: potUsd != null ? minQualifyingBuyUsd(potUsd) : null,
   };
   return chainState;
 }
@@ -156,21 +150,6 @@ function broadcast(msg: unknown) {
   for (const client of wss.clients) {
     if (client.readyState === WebSocket.OPEN) client.send(data);
   }
-}
-
-/**
- * Visual-only estimate of whether a buy cleared the qualifying threshold
- * (see qualify.ts), using the pot/price snapshot from the last chain-state
- * refresh — not a re-derivation of the keeper's on-chain decision. Good
- * enough to badge trades in the UI; null (no badge) if the price feed isn't
- * up yet.
- */
-function buyQualified(ethAmount: bigint): boolean | null {
-  const ethUsd = getEthUsd();
-  if (ethUsd == null || chainState == null) return null;
-  const potUsd = Number(formatEther(BigInt(chainState.prizePool))) * ethUsd;
-  const minUsd = minQualifyingBuyUsd(potUsd);
-  return Number(formatEther(ethAmount)) * ethUsd >= minUsd;
 }
 
 // ---------------------------------------------------------------- log handling
@@ -265,7 +244,6 @@ async function handleLogs(rawLogs: Log<bigint, number, false>[], live: boolean) 
         const price = d.args.postPrice as bigint;
         const reported = (isBuy ? d.args.buyer : d.args.seller) as string;
         const ethAmount = d.args.eth as bigint;
-        const qualified = isBuy ? buyQualified(ethAmount) : null;
         const trade: TradeRow = {
           block_number: Number(d.log.blockNumber),
           log_index: d.log.logIndex,
@@ -278,7 +256,6 @@ async function handleLogs(rawLogs: Log<bigint, number, false>[], live: boolean) 
           token_amount: (d.args.amount as bigint).toString(),
           price: price.toString(),
           market_cap: (price * ONE_BILLION).toString(),
-          qualified,
         };
         store.insertTrade(trade);
         if (live) broadcast({ type: "trade", trade });
