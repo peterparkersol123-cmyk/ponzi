@@ -11,10 +11,10 @@ const STEPS = [
 export function HowItWorks() {
   return (
     <FlatPanel title="How It Works">
-      <ol className="space-y-2.5 font-mono text-[13px] leading-relaxed text-cream/80">
+      <ol className="space-y-3 font-mono text-sm font-semibold leading-relaxed text-cream">
         {STEPS.map((step, i) => (
           <li key={i} className="flex items-start gap-3">
-            <span className="mt-0.5 shrink-0 font-bold text-hotpot">{i + 1}.</span>
+            <span className="mt-0.5 shrink-0 font-extrabold text-hotpot">{i + 1}.</span>
             <span>{step}</span>
           </li>
         ))}

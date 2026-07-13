@@ -42,7 +42,7 @@ export default function Home() {
 
       {/* pot | timer + last buyers | last winners + how it works */}
       <div className="grid gap-8 lg:grid-cols-[240px_1fr_320px]">
-        <div className="flex flex-col justify-between gap-8">
+        <div className="flex flex-col gap-8">
           <div ref={potRef}>
             <PotAmount state={data.state} />
           </div>
@@ -62,8 +62,8 @@ export default function Home() {
         </div>
 
         <div className="flex flex-col gap-8">
-          <PayoutHistory payouts={data.payouts} now={now} />
           <HowItWorks />
+          <PayoutHistory payouts={data.payouts} now={now} />
         </div>
       </div>
 

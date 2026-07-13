@@ -8,35 +8,35 @@ import type { Payout } from "@/lib/useIndexer";
 export function PayoutHistory({ payouts, now }: { payouts: Payout[]; now: number }) {
   return (
     <FlatPanel title="Last winners:">
-      {payouts.length === 0 && <div className="py-6 text-center text-xs text-cream/40">no payouts yet</div>}
+      {payouts.length === 0 && <div className="py-6 text-center text-sm font-semibold text-cream/60">no payouts yet</div>}
       {payouts.length > 0 && (
-        <table className="w-full text-left font-mono text-[12.5px] tabular-nums">
+        <table className="w-full text-left font-mono text-sm tabular-nums">
           <thead>
-            <tr className="text-cream/40">
-              <th className="py-1 pr-4 font-normal lowercase">round</th>
-              <th className="py-1 pr-4 font-normal lowercase">winner</th>
-              <th className="py-1 pr-4 text-right font-normal lowercase">won</th>
-              <th className="py-1 text-right font-normal lowercase">age</th>
+            <tr className="text-cream/60">
+              <th className="py-1.5 pr-4 font-bold uppercase">round</th>
+              <th className="py-1.5 pr-4 font-bold uppercase">winner</th>
+              <th className="py-1.5 pr-4 text-right font-bold uppercase">won</th>
+              <th className="py-1.5 text-right font-bold uppercase">age</th>
             </tr>
           </thead>
           <tbody>
             {payouts.map((p, i) => (
-              <tr key={p.round_id} className="border-t border-cream/10">
-                <td className="py-1.5 pr-4 text-cream/40">#{p.round_id}</td>
-                <td className="py-1.5 pr-4">
+              <tr key={p.round_id} className="border-t border-cream/15">
+                <td className="py-2 pr-4 font-bold text-cream">#{p.round_id}</td>
+                <td className="py-2 pr-4">
                   <a
                     href={explorerUrl ? `${explorerUrl}/tx/${p.tx_hash}` : undefined}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-cream/80 hover:text-hotpot hover:underline"
+                    className="font-bold text-cream hover:text-hotpot hover:underline"
                   >
                     {shortAddr(p.winner)}
                   </a>
                 </td>
-                <td className="py-1.5 pr-4 text-right font-bold text-hotpot">+{fmtEth(p.amount)}</td>
-                <td className="py-1.5 text-right text-cream/40">
+                <td className="py-2 pr-4 text-right font-extrabold text-hotpot">+{fmtEth(p.amount)}</td>
+                <td className="py-2 text-right font-bold text-cream/60">
                   {fmtAge(p.timestamp, now)}
-                  {i === 0 && <span className="ml-1.5 text-tangerine">●</span>}
+                  {i === 0 && <span className="ml-1.5 text-hotpot">●</span>}
                 </td>
               </tr>
             ))}
