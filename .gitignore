@@ -1,0 +1,8 @@
+# local tooling/session state — not part of the project
+.claude/
+
+# unrelated project living in this worktree
+Desktop/
+
+# OS
+.DS_Store

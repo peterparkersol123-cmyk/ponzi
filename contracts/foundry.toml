@@ -1,0 +1,18 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc_version = "0.8.28"
+optimizer = true
+optimizer_runs = 10_000
+
+[rpc_endpoints]
+# Robinhood Chain (Arbitrum Orbit L2). Verify chain id live with `cast chain-id`
+# before broadcasting — testnet id has been documented as both 46630 and 46646.
+robinhood_mainnet = "https://rpc.mainnet.chain.robinhood.com"
+robinhood_testnet = "${ROBINHOOD_TESTNET_RPC}"
+
+[etherscan]
+# Blockscout verification: forge verify-contract --verifier blockscout
+robinhood_mainnet = { key = "no-key-needed", url = "https://robinhoodchain.blockscout.com/api" }
+robinhood_testnet = { key = "no-key-needed", url = "https://explorer.testnet.chain.robinhood.com/api" }

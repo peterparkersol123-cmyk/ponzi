@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+:root {
+  /* HOTPOT theme */
+  --hotpot: #cff23f; /* bright lime field */
+  --hotpot-soft: #eafab0; /* warmer wash for panels */
+  --cream: #fffdf3; /* card surface — warm, not stark white */
+  --ink: #1c1a12; /* soft near-black */
+  --berry: #ff5c8a; /* playful accent (pot / highlights) */
+  --tangerine: #ff9d3d; /* warm secondary accent */
+}
+
+@theme inline {
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, monospace;
+  --font-display: var(--font-display), ui-rounded, "Segoe UI Rounded", "Nunito", sans-serif;
+  --color-hotpot: var(--hotpot);
+  --color-hotpot-soft: var(--hotpot-soft);
+  --color-cream: var(--cream);
+  --color-ink: var(--ink);
+  --color-berry: var(--berry);
+  --color-tangerine: var(--tangerine);
+}
+
+/* Dark control-room canvas — the node network is the texture now, not dots. */
+.grid-bg {
+  background-color: var(--ink);
+}
+
+/* Chunky sticker card — thick outline, hard offset shadow, faint lime glow
+   so it reads as "lit up" against the dark canvas. */
+.card {
+  border: 2.5px solid var(--ink);
+  border-radius: 1.5rem;
+  background: var(--cream);
+  box-shadow:
+    5px 5px 0 0 var(--ink),
+    0 0 32px -10px rgba(207, 242, 63, 0.45);
+}
+
+/* ---- coins flying into the pot ---- */
+.pot-drop-layer {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 40;
+}
+
+.pot-coin {
+  position: absolute;
+  z-index: 41;
+  pointer-events: none;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  border: 2px solid var(--ink);
+  background: var(--berry);
+  color: var(--cream);
+  font-family: var(--font-display, sans-serif);
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  box-shadow: 2px 2px 0 0 var(--ink);
+  will-change: transform, opacity;
+}
+
+/* the pot bumps + glows when a coin lands */
+.pot-hit {
+  animation: pot-hit 0.4s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+@keyframes pot-hit {
+  0% {
+    transform: scale(1) rotate(0deg);
+  }
+  35% {
+    transform: scale(1.04) rotate(-1deg);
+  }
+  70% {
+    transform: scale(1.02) rotate(1deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+/* gentle idle bob for the hero pot */
+.pot-bob {
+  animation: pot-bob 4s ease-in-out infinite;
+}
+@keyframes pot-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* neon glow for the hero pot's amount + countdown — used sparingly, this is
+   the one place on the page that should read as "the reactor core". */
+.neon-text {
+  text-shadow:
+    0 0 10px currentColor,
+    0 0 28px currentColor;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pot-coin,
+  .pot-hit,
+  .pot-bob {
+    animation: none !important;
+  }
+}
