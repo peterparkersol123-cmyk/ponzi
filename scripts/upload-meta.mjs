@@ -6,11 +6,11 @@
  */
 import { readFile } from "node:fs/promises";
 
-const IMAGE_PATH = "/Users/aske/Downloads/RH.png";
-const CREATOR = "0xb267b6ec60d1ef728463629ac236a395225858f0";
-const DESCRIPTION = "TEST RUN";
-const WEBSITE = "https://google.com";
-const TWITTER = "https://x.com";
+const IMAGE_PATH = "/Users/aske/Downloads/photo_2026-07-13_13-39-16.jpg";
+const CREATOR = "0xeb760402b24a1ee8cc43fbd0820e55ecb711a837";
+const DESCRIPTION = "HOTPOT";
+const WEBSITE = "https://www.hotpotrh.xyz/";
+const TWITTER = "https://x.com/HotpotRH";
 const TELEGRAM = null;
 
 const MUTATION = `
@@ -39,7 +39,7 @@ form.append(
 form.append("map", JSON.stringify({ "0": ["variables.file"] }));
 
 const bytes = await readFile(IMAGE_PATH);
-form.append("0", new Blob([bytes], { type: "image/png" }), "image.png");
+form.append("0", new Blob([bytes], { type: "image/jpeg" }), "image.jpg");
 
 const res = await fetch("https://funcs.flap.sh/api/upload", {
   method: "POST",

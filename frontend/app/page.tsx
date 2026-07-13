@@ -7,6 +7,7 @@ import { CopyAddress } from "@/components/CopyAddress";
 import { HowItWorks } from "@/components/HowItWorks";
 import { Leaderboard } from "@/components/Leaderboard";
 import { Logo } from "@/components/Logo";
+import { MinBuyExample } from "@/components/MinBuyExample";
 import { PayoutHistory } from "@/components/PayoutHistory";
 import { PotDrops } from "@/components/PotDrops";
 import { PotPanel } from "@/components/PotPanel";
@@ -53,10 +54,16 @@ export default function Home() {
         </div>
       </header>
 
-      {/* live feed sits to the left, running the full height of the dashboard */}
+      {/* left column: live feed on top, qualifying-buy example below, each
+          taking half the column's height */}
       <div className="grid items-stretch gap-5 lg:grid-cols-[320px_1fr]">
-        <div className="h-[520px] lg:h-auto">
-          <XFeed />
+        <div className="flex flex-col gap-5">
+          <div className="h-[280px] lg:h-0 lg:flex-1">
+            <XFeed />
+          </div>
+          <div className="h-[420px] lg:h-0 lg:flex-1">
+            <MinBuyExample />
+          </div>
         </div>
 
         <div className="space-y-5">

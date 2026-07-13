@@ -36,6 +36,10 @@ export interface Trade {
   token_amount: string;
   price: string;
   market_cap: string;
+  /** Buys only: did this buy clear the qualifying threshold (see PotPanel's
+   *  "min buy to qualify" badge)? null for sells, or if the price feed was
+   *  down when the buy landed. Visual indicator only. */
+  qualified: boolean | null;
 }
 
 export interface Payout {

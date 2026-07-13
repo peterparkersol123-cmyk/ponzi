@@ -29,7 +29,18 @@ const TOKEN = required("TOKEN_ADDRESS").toLowerCase() as `0x${string}`;
 const JACKPOT = required("JACKPOT_ADDRESS") as `0x${string}`;
 const KEEPER_KEY = required("KEEPER_PRIVATE_KEY") as `0x${string}`;
 const CHAIN_ID = Number(process.env.CHAIN_ID ?? 4663);
-const SETTLE_POLL_MS = Number(process.env.SETTLE_POLL_MS ?? 3_000);
+const SETTLE_POLL_MS = Number(process.env.SETTLE_POLL_MS ?? 1_000);
+// recordBuy racing another wallet's permissionless settle() is a gas-priority
+// contest as much as a detection-speed one — a cheap tx can sit queued behind
+// others during congestion. Bump priority fee well above the network's
+// current suggestion so recordBuy is never the one waiting in line.
+const GAS_PRIORITY_MULTIPLIER = Number(process.env.GAS_PRIORITY_MULTIPLIER ?? 3);
+// Without WS_RPC_URL, watchEvent falls back to HTTP polling at viem's default
+// ~4s interval — that delay is what lets a late recordBuy lose the race
+// against another wallet's permissionless settle() once the deadline passes.
+// 1s is the fastest useful floor; a real websocket RPC (push, not poll) is
+// still the actual fix.
+const HTTP_POLLING_MS = 1_000;
 
 function required(name: string): string {
   const v = process.env[name];
@@ -48,7 +59,7 @@ const chain = defineChain({
 });
 
 const account = privateKeyToAccount(KEEPER_KEY);
-const publicClient = createPublicClient({ chain, transport: http(RPC_URL) });
+const publicClient = createPublicClient({ chain, transport: http(RPC_URL), pollingInterval: HTTP_POLLING_MS });
 const streamClient: PublicClient = WS_RPC_URL
   ? createPublicClient({ chain, transport: webSocket(WS_RPC_URL) })
   : publicClient;
@@ -61,12 +72,30 @@ function enqueue(fn: () => Promise<void>) {
   queue = queue.then(fn).catch((err) => console.error("keeper tx failed:", err?.shortMessage ?? err));
 }
 
+/**
+ * Fee overrides that push this tx ahead of the network's default queue.
+ * Tries EIP-1559 first (bumps priority fee, widens the fee cap to match);
+ * falls back to a bumped legacy gasPrice for chains that don't support 1559.
+ */
+async function urgentFees(): Promise<Record<string, bigint>> {
+  try {
+    const { maxFeePerGas, maxPriorityFeePerGas } = await publicClient.estimateFeesPerGas();
+    const priority = maxPriorityFeePerGas * BigInt(GAS_PRIORITY_MULTIPLIER);
+    const baseFee = maxFeePerGas - maxPriorityFeePerGas;
+    return { maxPriorityFeePerGas: priority, maxFeePerGas: baseFee + priority };
+  } catch {
+    const gasPrice = await publicClient.getGasPrice();
+    return { gasPrice: gasPrice * BigInt(GAS_PRIORITY_MULTIPLIER) };
+  }
+}
+
 async function recordBuy(buyer: `0x${string}`) {
   const hash = await wallet.writeContract({
     address: JACKPOT,
     abi: jackpotWritesAbi,
     functionName: "recordBuy",
     args: [buyer],
+    ...(await urgentFees()),
   });
   await publicClient.waitForTransactionReceipt({ hash });
   console.log(`recordBuy(${buyer}) — ${hash}`);
@@ -77,6 +106,7 @@ async function settle() {
     address: JACKPOT,
     abi: jackpotWritesAbi,
     functionName: "settle",
+    ...(await urgentFees()),
   });
   await publicClient.waitForTransactionReceipt({ hash });
   console.log(`settle() — ${hash}`);

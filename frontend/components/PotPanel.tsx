@@ -1,7 +1,7 @@
 "use client";
 
 import { Logo } from "./Logo";
-import { fmtCountdown, fmtEth, shortAddr } from "@/lib/format";
+import { fmtCountdown, fmtEth, fmtUsdCompact, shortAddr } from "@/lib/format";
 import type { ChainState } from "@/lib/useIndexer";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
@@ -81,9 +81,17 @@ export function PotPanel({ state, now }: { state: ChainState | null; now: number
               state ? "text-berry" : "text-cream/25"
             }`}
           >
-            {state ? fmtEth(state.prizePool) : "—"}
-            <span className="ml-1 align-top text-xl text-cream">ETH</span>
+            {state
+              ? state.ethUsd != null
+                ? fmtUsdCompact(state.prizePool, state.ethUsd)
+                : `${fmtEth(state.prizePool)} ETH`
+              : "—"}
           </div>
+          {state && (
+            <div className="mt-0.5 font-mono text-xs font-semibold text-cream/40">
+              {fmtEth(state.prizePool)} ETH
+            </div>
+          )}
           {state?.minBuyUsd != null && (
             <div className="mt-2 inline-flex flex-col items-center gap-0.5">
               <span className="rounded-full border-2 border-tangerine bg-tangerine/10 px-3 py-1 font-display text-xs font-extrabold tabular-nums text-tangerine">

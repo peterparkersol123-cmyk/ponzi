@@ -35,6 +35,16 @@ export function TradeTape({ trades, now }: { trades: Trade[]; now: number }) {
                     >
                       {buy ? "buy" : "sell"}
                     </span>
+                    {buy && t.qualified === true && (
+                      <span title="qualified as last buyer" className="ml-1 text-hotpot">
+                        ✓
+                      </span>
+                    )}
+                    {buy && t.qualified === false && (
+                      <span title="too small to qualify — still went to the pot" className="ml-1 text-cream/30">
+                        ✗
+                      </span>
+                    )}
                   </td>
                   <td className="py-1 pr-4 text-right font-bold text-cream">{fmtEth(t.eth_amount)}</td>
                   <td className="py-1 pr-4 text-right text-cream/60">{fmtTokens(t.token_amount)}</td>

@@ -26,7 +26,11 @@ const START_BLOCK = BigInt(process.env.START_BLOCK ?? "0");
 const PORT = Number(process.env.PORT ?? 8787);
 const DB_PATH = process.env.DB_PATH ?? "./jackpot.db";
 const BACKFILL_CHUNK = 5_000n;
-const STATE_POLL_MS = 3_000;
+const STATE_POLL_MS = 1_000;
+// Without WS_RPC_URL, watchEvent falls back to HTTP polling at viem's default
+// ~4s interval — too slow for a 60s round timer. 1s is the fastest useful
+// floor; a real websocket RPC (push, not poll) is still the actual fix.
+const HTTP_POLLING_MS = 1_000;
 
 const ONE_BILLION = 1_000_000_000n; // Flap tokens: fixed 1B max supply
 
@@ -41,12 +45,15 @@ function required(name: string): string {
 
 // ---------------------------------------------------------------- chain clients
 
-const httpClient = createPublicClient({ transport: http(RPC_URL) });
+const httpClient = createPublicClient({ transport: http(RPC_URL), pollingInterval: HTTP_POLLING_MS });
 const streamClient: PublicClient = WS_RPC_URL
   ? createPublicClient({ transport: webSocket(WS_RPC_URL) })
   : httpClient;
 
 const store = new Store(openDb(DB_PATH));
+if (store.resetIfContractChanged(JACKPOT)) {
+  console.log(`Jackpot contract changed — wiped stale history, starting fresh for ${JACKPOT}`);
+}
 
 // ---------------------------------------------------------------- event routing
 
@@ -149,6 +156,21 @@ function broadcast(msg: unknown) {
   }
 }
 
+/**
+ * Visual-only estimate of whether a buy cleared the qualifying threshold
+ * (see qualify.ts), using the pot/price snapshot from the last chain-state
+ * refresh — not a re-derivation of the keeper's on-chain decision. Good
+ * enough to badge trades in the UI; null (no badge) if the price feed isn't
+ * up yet.
+ */
+function buyQualified(ethAmount: bigint): boolean | null {
+  const ethUsd = getEthUsd();
+  if (ethUsd == null || chainState == null) return null;
+  const potUsd = Number(formatEther(BigInt(chainState.prizePool))) * ethUsd;
+  const minUsd = minQualifyingBuyUsd(potUsd);
+  return Number(formatEther(ethAmount)) * ethUsd >= minUsd;
+}
+
 // ---------------------------------------------------------------- log handling
 
 // Round attribution: jackpot Payout(n) closes round n; trades after belong to n+1.
@@ -225,6 +247,8 @@ async function handleLogs(rawLogs: Log<bigint, number, false>[], live: boolean) 
         const isBuy = d.name === "portal:TokenBought";
         const price = d.args.postPrice as bigint;
         const reported = (isBuy ? d.args.buyer : d.args.seller) as string;
+        const ethAmount = d.args.eth as bigint;
+        const qualified = isBuy ? buyQualified(ethAmount) : null;
         const trade: TradeRow = {
           block_number: Number(d.log.blockNumber),
           log_index: d.log.logIndex,
@@ -233,10 +257,11 @@ async function handleLogs(rawLogs: Log<bigint, number, false>[], live: boolean) 
           round_id: currentRound,
           trader: resolveRealTrader(decoded, d.log.transactionHash, isBuy, reported),
           kind: isBuy ? "buy" : "sell",
-          eth_amount: (d.args.eth as bigint).toString(),
+          eth_amount: ethAmount.toString(),
           token_amount: (d.args.amount as bigint).toString(),
           price: price.toString(),
           market_cap: (price * ONE_BILLION).toString(),
+          qualified,
         };
         store.insertTrade(trade);
         if (live) broadcast({ type: "trade", trade });

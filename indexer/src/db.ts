@@ -19,6 +19,7 @@ export function openDb(path: string) {
       token_amount TEXT NOT NULL,
       price TEXT NOT NULL,
       market_cap TEXT NOT NULL,
+      qualified INTEGER,
       PRIMARY KEY (block_number, log_index)
     );
     CREATE INDEX IF NOT EXISTS idx_trades_time ON trades (timestamp);
@@ -43,6 +44,13 @@ export function openDb(path: string) {
       value TEXT NOT NULL
     );
   `);
+  // Pre-existing DBs (e.g. the Railway volume) predate the qualified column —
+  // CREATE TABLE IF NOT EXISTS is a no-op on those, so add it explicitly.
+  try {
+    db.exec("ALTER TABLE trades ADD COLUMN qualified INTEGER");
+  } catch {
+    // already has the column
+  }
   return db;
 }
 
@@ -58,6 +66,11 @@ export interface TradeRow {
   token_amount: string;
   price: string;
   market_cap: string;
+  /** For buys: did this buy clear the qualifying threshold (see qualify.ts)
+   *  at the time it was processed? null for sells, or if the price feed was
+   *  down when the buy was processed. Visual-only — not the on-chain source
+   *  of truth for who the keeper actually recorded as last buyer. */
+  qualified: boolean | null;
 }
 
 export interface PayoutRow {
@@ -76,8 +89,8 @@ export class Store {
     this.db
       .prepare(
         `INSERT OR IGNORE INTO trades
-         (block_number, log_index, tx_hash, timestamp, round_id, trader, kind, eth_amount, token_amount, price, market_cap)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+         (block_number, log_index, tx_hash, timestamp, round_id, trader, kind, eth_amount, token_amount, price, market_cap, qualified)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         t.block_number,
@@ -90,7 +103,8 @@ export class Store {
         t.eth_amount,
         t.token_amount,
         t.price,
-        t.market_cap
+        t.market_cap,
+        t.qualified == null ? null : t.qualified ? 1 : 0
       );
   }
 
@@ -104,9 +118,10 @@ export class Store {
   }
 
   recentTrades(limit = 50): TradeRow[] {
-    return this.db
+    const rows = this.db
       .prepare(`SELECT * FROM trades ORDER BY block_number DESC, log_index DESC LIMIT ?`)
-      .all(limit) as unknown as TradeRow[];
+      .all(limit) as unknown as (TradeRow & { qualified: number | null })[];
+    return rows.map((r) => ({ ...r, qualified: r.qualified == null ? null : !!r.qualified }));
   }
 
   recentPayouts(limit = 20): PayoutRow[] {
@@ -176,5 +191,24 @@ export class Store {
 
   setMeta(key: string, value: string) {
     this.db.prepare(`INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(key, value);
+  }
+
+  /**
+   * If this DB was previously used for a different jackpot contract, wipe it
+   * clean so stale history from the old contract can never collide with (and
+   * silently block, via INSERT OR IGNORE) the new one's data — this is what
+   * caused a real payout to go missing after switching from a test token to
+   * the real one, since both contracts' round numbering starts at 1. Returns
+   * true if a reset happened.
+   */
+  resetIfContractChanged(jackpotAddress: string): boolean {
+    const addr = jackpotAddress.toLowerCase();
+    const prev = this.getMeta("jackpot_address");
+    if (prev === addr) return false;
+    if (prev !== undefined) {
+      this.db.exec("DELETE FROM trades; DELETE FROM payouts; DELETE FROM balances; DELETE FROM meta WHERE key = 'last_block';");
+    }
+    this.setMeta("jackpot_address", addr);
+    return prev !== undefined;
   }
 }
