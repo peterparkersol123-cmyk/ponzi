@@ -4,12 +4,15 @@ import {
   decodeEventLog,
   defineChain,
   http,
+  toEventSelector,
   webSocket,
   type Log,
   type PublicClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { jackpotWritesAbi, portalEvents, transferEvent } from "./abi.js";
+
+const TRANSFER_SELECTOR = toEventSelector(transferEvent);
 
 /// The keeper is the game's referee. It watches Flap's Portal for buys of the
 /// token and records the latest buyer on-chain (resetting the 60s countdown),
@@ -143,7 +146,9 @@ async function resolveBuyer(buyTx: `0x${string}`): Promise<`0x${string}` | null>
       await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
     }
   }
-  const transfers = receipt.logs.filter((l) => l.address.toLowerCase() === TOKEN);
+  const transfers = receipt.logs.filter(
+    (l) => l.address.toLowerCase() === TOKEN && l.topics[0] === TRANSFER_SELECTOR,
+  );
   if (transfers.length === 0) return null;
   const last = transfers.reduce((a, b) => (b.logIndex > a.logIndex ? b : a));
   const { args } = decodeEventLog({ abi: [transferEvent], data: last.data, topics: last.topics });

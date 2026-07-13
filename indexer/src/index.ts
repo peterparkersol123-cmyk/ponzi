@@ -242,7 +242,10 @@ async function resolveRealTrader(
 
   try {
     const receipt = await httpClient.getTransactionReceipt({ hash: txHash });
-    const transfers = receipt.logs.filter((l) => l.address.toLowerCase() === TOKEN);
+    const transferSelector = toEventSelector(transferEvent);
+    const transfers = receipt.logs.filter(
+      (l) => l.address.toLowerCase() === TOKEN && l.topics[0] === transferSelector,
+    );
     if (transfers.length === 0) return fallback.toLowerCase();
     const last = transfers.reduce((a, b) => (b.logIndex > a.logIndex ? b : a));
     const { args } = decodeEventLog({ abi: [transferEvent], data: last.data, topics: last.topics });
