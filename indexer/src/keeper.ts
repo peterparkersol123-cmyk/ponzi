@@ -126,9 +126,23 @@ async function settle() {
  * the time TokenBought arrives, its Transfer(s) are often in a different
  * batch (or haven't arrived yet). A tx's receipt always has all of that
  * tx's logs, regardless of how the provider happened to batch the pushes.
+ *
+ * The WS provider (Alchemy) can notify about a tx before the separate HTTP
+ * node behind RPC_URL has indexed its receipt yet — retries with backoff
+ * ride out that lag instead of throwing straight into an unhandled
+ * rejection that crashes the whole keeper process.
  */
 async function resolveBuyer(buyTx: `0x${string}`): Promise<`0x${string}` | null> {
-  const receipt = await publicClient.getTransactionReceipt({ hash: buyTx });
+  let receipt;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      receipt = await publicClient.getTransactionReceipt({ hash: buyTx });
+      break;
+    } catch (err) {
+      if (attempt >= 5) throw err;
+      await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+    }
+  }
   const transfers = receipt.logs.filter((l) => l.address.toLowerCase() === TOKEN);
   if (transfers.length === 0) return null;
   const last = transfers.reduce((a, b) => (b.logIndex > a.logIndex ? b : a));
@@ -179,7 +193,13 @@ async function main() {
   streamClient.watchEvent({
     address: PORTAL,
     events: [portalEvents.TokenBought],
-    onLogs: async (logs) => handleBuys(logs as Log[]),
+    onLogs: async (logs) => {
+      try {
+        await handleBuys(logs as Log[]);
+      } catch (err) {
+        console.error("handleBuys failed:", err);
+      }
+    },
     onError: (err) => console.error("buy stream error:", err),
   });
 
