@@ -26,18 +26,20 @@ const TOKEN = required("TOKEN_ADDRESS").toLowerCase() as `0x${string}`;
 const JACKPOT = required("JACKPOT_ADDRESS") as `0x${string}`;
 const KEEPER_KEY = required("KEEPER_PRIVATE_KEY") as `0x${string}`;
 const CHAIN_ID = Number(process.env.CHAIN_ID ?? 4663);
-const SETTLE_POLL_MS = Number(process.env.SETTLE_POLL_MS ?? 1_000);
+// Only checks whether *this* keeper should call settle() itself — settle()
+// is permissionless, so this is a convenience trigger, not what determines
+// game correctness. 1s of extra reads (2/cycle) on top of the indexer's own
+// polling was enough to trip Alchemy's free-tier rate limit and 429 both
+// services. 3s is still plenty responsive for a 60s round timer.
+const SETTLE_POLL_MS = Number(process.env.SETTLE_POLL_MS ?? 3_000);
 // recordBuy racing another wallet's permissionless settle() is a gas-priority
 // contest as much as a detection-speed one — a cheap tx can sit queued behind
 // others during congestion. Bump priority fee well above the network's
 // current suggestion so recordBuy is never the one waiting in line.
 const GAS_PRIORITY_MULTIPLIER = Number(process.env.GAS_PRIORITY_MULTIPLIER ?? 3);
-// Without WS_RPC_URL, watchEvent falls back to HTTP polling at viem's default
-// ~4s interval — that delay is what lets a late recordBuy lose the race
-// against another wallet's permissionless settle() once the deadline passes.
-// 1s is the fastest useful floor; a real websocket RPC (push, not poll) is
-// still the actual fix.
-const HTTP_POLLING_MS = 1_000;
+// Only used as a fallback when WS_RPC_URL isn't set. With WS configured
+// (as it should be), buy detection is push-based and this barely matters.
+const HTTP_POLLING_MS = 4_000;
 
 function required(name: string): string {
   const v = process.env[name];

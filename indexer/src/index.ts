@@ -27,11 +27,15 @@ const DB_PATH = process.env.DB_PATH ?? "./jackpot.db";
 // Alchemy's free tier caps eth_getLogs at a 10-block range; a paid plan (or a
 // provider without that cap) can raise this via BACKFILL_CHUNK.
 const BACKFILL_CHUNK = BigInt(process.env.BACKFILL_CHUNK ?? "10");
-const STATE_POLL_MS = 1_000;
-// Without WS_RPC_URL, watchEvent falls back to HTTP polling at viem's default
-// ~4s interval — too slow for a 60s round timer. 1s is the fastest useful
-// floor; a real websocket RPC (push, not poll) is still the actual fix.
-const HTTP_POLLING_MS = 1_000;
+// Now that WS_RPC_URL delivers buy events by push (not poll), this only
+// governs the periodic pot/deadline refresh — 1s was hammering Alchemy's
+// free-tier rate limit (5 reads/cycle + the keeper's own reads on the same
+// key) hard enough to 429 constantly and stall the site. 3s keeps the
+// display fresh without tripping the limit.
+const STATE_POLL_MS = 3_000;
+// Only used as a fallback when WS_RPC_URL isn't set (plain HTTP polling for
+// event watching). With WS configured this is effectively unused.
+const HTTP_POLLING_MS = 4_000;
 
 const ONE_BILLION = 1_000_000_000n; // Flap tokens: fixed 1B max supply
 
