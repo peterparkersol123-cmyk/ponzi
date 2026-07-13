@@ -1,6 +1,7 @@
 import {
   createPublicClient,
   createWalletClient,
+  decodeEventLog,
   defineChain,
   http,
   webSocket,
@@ -110,19 +111,36 @@ async function settle() {
   console.log(`settle() — ${hash}`);
 }
 
+/**
+ * The recorded buyer is resolved from the token's own Transfer trail in the
+ * buy's transaction, NOT Portal's reported `buyer` field — aggregators/
+ * routers (GMGN, etc.) often call Portal themselves and forward the tokens
+ * on to the real trader within the same tx, so the router would otherwise
+ * get credited (and then fail the on-chain `must hold the token` check,
+ * since it no longer does). The LAST Transfer of the token in that tx is
+ * the address that's actually, verifiably holding it afterward.
+ *
+ * Fetches the transaction receipt directly rather than relying on the
+ * Transfer log showing up in the same watchEvent batch as TokenBought — a
+ * WS subscription typically pushes each log as its own notification, so by
+ * the time TokenBought arrives, its Transfer(s) are often in a different
+ * batch (or haven't arrived yet). A tx's receipt always has all of that
+ * tx's logs, regardless of how the provider happened to batch the pushes.
+ */
+async function resolveBuyer(buyTx: `0x${string}`): Promise<`0x${string}` | null> {
+  const receipt = await publicClient.getTransactionReceipt({ hash: buyTx });
+  const transfers = receipt.logs.filter((l) => l.address.toLowerCase() === TOKEN);
+  if (transfers.length === 0) return null;
+  const last = transfers.reduce((a, b) => (b.logIndex > a.logIndex ? b : a));
+  const { args } = decodeEventLog({ abi: [transferEvent], data: last.data, topics: last.topics });
+  return (args as { to: `0x${string}` }).to;
+}
+
 /// Only the last buy in a batch matters (earlier resets are overwritten
 /// anyway), so collapse to that one per poll to save gas. Any buy resets the
 /// countdown — there is no minimum size to qualify.
-///
-/// The recorded buyer is resolved from the token's own Transfer trail in
-/// that buy's transaction, NOT Portal's reported `buyer` field —
-/// aggregators/routers (GMGN, etc.) often call Portal themselves and forward
-/// the tokens on to the real trader within the same tx, so the router would
-/// otherwise get credited (and then fail the on-chain `must hold the token`
-/// check, since it no longer does). The LAST Transfer of the token in that
-/// tx is the address that's actually, verifiably holding it afterward.
 async function handleBuys(logs: Log[]) {
-  type Named = Log & { eventName?: string; address: `0x${string}`; args: Record<string, unknown> };
+  type Named = Log & { eventName?: string; args: Record<string, unknown> };
   const named = logs as Named[];
 
   const buys = named.filter(
@@ -131,16 +149,12 @@ async function handleBuys(logs: Log[]) {
   if (buys.length === 0) return;
 
   const lastBuyTx = buys[buys.length - 1].transactionHash;
-
-  const transfers = named.filter(
-    (l) => l.eventName === "Transfer" && l.address.toLowerCase() === TOKEN && l.transactionHash === lastBuyTx,
-  );
-  if (transfers.length === 0) {
+  if (lastBuyTx == null) return;
+  const realBuyer = await resolveBuyer(lastBuyTx);
+  if (realBuyer == null) {
     console.error(`no Transfer found for buy tx ${lastBuyTx}, skipping recordBuy`);
     return;
   }
-  const last = transfers.reduce((a, b) => ((b.logIndex ?? 0) > (a.logIndex ?? 0) ? b : a));
-  const realBuyer = last.args.to as `0x${string}`;
   enqueue(() => recordBuy(realBuyer));
 }
 
@@ -160,13 +174,11 @@ async function settleLoop() {
 }
 
 async function main() {
-  console.log(`Keeper ${account.address} watching Portal ${PORTAL} + Transfers of ${TOKEN}`);
+  console.log(`Keeper ${account.address} watching Portal ${PORTAL} for buys of ${TOKEN}`);
 
-  // Watch both in one subscription so a buy's Transfer trail always lands in
-  // the same batch as its TokenBought event.
   streamClient.watchEvent({
-    address: [PORTAL, TOKEN],
-    events: [portalEvents.TokenBought, transferEvent],
+    address: PORTAL,
+    events: [portalEvents.TokenBought],
     onLogs: async (logs) => handleBuys(logs as Log[]),
     onError: (err) => console.error("buy stream error:", err),
   });
