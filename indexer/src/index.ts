@@ -180,7 +180,22 @@ const blockTimestamps = new Map<bigint, number>();
 async function blockTimestamp(blockNumber: bigint): Promise<number> {
   const cached = blockTimestamps.get(blockNumber);
   if (cached !== undefined) return cached;
-  const block = await httpClient.getBlock({ blockNumber });
+
+  // The WS stream can notify about a block before the (possibly different,
+  // slower-syncing) HTTP node behind RPC_URL has indexed it yet — a few
+  // short retries rides out that lag instead of crashing the whole process
+  // on an uncaught BlockNotFoundError.
+  let block;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      block = await httpClient.getBlock({ blockNumber });
+      break;
+    } catch (err) {
+      if (attempt >= 5) throw err;
+      await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+    }
+  }
+
   const ts = Number(block.timestamp);
   blockTimestamps.set(blockNumber, ts);
   if (blockTimestamps.size > 1000) {
