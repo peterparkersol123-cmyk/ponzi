@@ -1,9 +1,11 @@
 import {
   createPublicClient,
   createWalletClient,
+  decodeEventLog,
   defineChain,
   formatEther,
   http,
+  toEventSelector,
   webSocket,
   type Log,
   type PublicClient,
@@ -12,6 +14,8 @@ import { privateKeyToAccount } from "viem/accounts";
 import { jackpotWritesAbi, portalEvents, transferEvent } from "./abi.js";
 import { startEthUsdPoller } from "./ethUsd.js";
 import { minQualifyingBuyUsd } from "./qualify.js";
+
+const TRANSFER_SELECTOR = toEventSelector(transferEvent);
 
 /// The keeper is the game's referee. It watches Flap's Portal for buys of the
 /// token and records the latest buyer on-chain (resetting the 60s countdown),
@@ -114,6 +118,47 @@ async function settle() {
   console.log(`settle() — ${hash}`);
 }
 
+/**
+ * The recorded buyer is resolved from the token's own Transfer trail in the
+ * buy's transaction, NOT Portal's reported `buyer` field — aggregators/
+ * routers (GMGN, etc.) often call Portal themselves and forward the tokens
+ * on to the real trader within the same tx, so the router would otherwise
+ * get credited (and then fail the on-chain `must hold the token` check,
+ * since it no longer does). The LAST Transfer of the token in that tx is
+ * the address that's actually, verifiably holding it afterward.
+ *
+ * Fetches the transaction receipt directly rather than relying on the
+ * Transfer log showing up in the same watchEvent batch as TokenBought — a
+ * WS subscription typically pushes each log as its own notification, so by
+ * the time TokenBought arrives, its Transfer(s) are often in a different
+ * batch (or haven't arrived yet). A tx's receipt always has all of that
+ * tx's logs, regardless of how the provider happened to batch the pushes.
+ *
+ * The WS provider (Alchemy) can notify about a tx before the separate HTTP
+ * node behind RPC_URL has indexed its receipt yet — retries with backoff
+ * ride out that lag instead of throwing straight into an unhandled
+ * rejection that crashes the whole keeper process.
+ */
+async function resolveBuyer(buyTx: `0x${string}`): Promise<`0x${string}` | null> {
+  let receipt;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      receipt = await publicClient.getTransactionReceipt({ hash: buyTx });
+      break;
+    } catch (err) {
+      if (attempt >= 5) throw err;
+      await new Promise((r) => setTimeout(r, 250 * (attempt + 1)));
+    }
+  }
+  const transfers = receipt.logs.filter(
+    (l) => l.address.toLowerCase() === TOKEN && l.topics[0] === TRANSFER_SELECTOR,
+  );
+  if (transfers.length === 0) return null;
+  const last = transfers.reduce((a, b) => (b.logIndex > a.logIndex ? b : a));
+  const { args } = decodeEventLog({ abi: [transferEvent], data: last.data, topics: last.topics });
+  return (args as { to: `0x${string}` }).to;
+}
+
 /// Only the last QUALIFYING buy in a batch matters (earlier resets are
 /// overwritten anyway), so collapse to that one per poll to save gas. A buy
 /// "qualifies" if its ETH value converts to at least minQualifyingBuyUsd()
@@ -122,16 +167,8 @@ async function settle() {
 /// countdown or make the buyer eligible. If the ETH/USD feed is temporarily
 /// unavailable, or the on-chain pot read fails, we fail OPEN (record the
 /// last buy unchecked) rather than let a price-feed hiccup halt the game.
-///
-/// The recorded buyer is resolved from the token's own Transfer trail in
-/// that buy's transaction, NOT Portal's reported `buyer` field —
-/// aggregators/routers (GMGN, etc.) often call Portal themselves and forward
-/// the tokens on to the real trader within the same tx, so the router would
-/// otherwise get credited (and then fail the on-chain `must hold the token`
-/// check, since it no longer does). The LAST Transfer of the token in that
-/// tx is the address that's actually, verifiably holding it afterward.
 async function handleBuys(logs: Log[]) {
-  type Named = Log & { eventName?: string; address: `0x${string}`; args: Record<string, unknown> };
+  type Named = Log & { eventName?: string; args: Record<string, unknown> };
   const named = logs as Named[];
 
   const buys = named.filter(
@@ -167,16 +204,12 @@ async function handleBuys(logs: Log[]) {
   }
 
   const lastBuyTx = qualifying[qualifying.length - 1].transactionHash;
-
-  const transfers = named.filter(
-    (l) => l.eventName === "Transfer" && l.address.toLowerCase() === TOKEN && l.transactionHash === lastBuyTx,
-  );
-  if (transfers.length === 0) {
+  if (lastBuyTx == null) return;
+  const realBuyer = await resolveBuyer(lastBuyTx);
+  if (realBuyer == null) {
     console.error(`no Transfer found for buy tx ${lastBuyTx}, skipping recordBuy`);
     return;
   }
-  const last = transfers.reduce((a, b) => ((b.logIndex ?? 0) > (a.logIndex ?? 0) ? b : a));
-  const realBuyer = last.args.to as `0x${string}`;
   enqueue(() => recordBuy(realBuyer));
 }
 
@@ -196,14 +229,18 @@ async function settleLoop() {
 }
 
 async function main() {
-  console.log(`Keeper ${account.address} watching Portal ${PORTAL} + Transfers of ${TOKEN}`);
+  console.log(`Keeper ${account.address} watching Portal ${PORTAL} for buys of ${TOKEN}`);
 
-  // Watch both in one subscription so a buy's Transfer trail always lands in
-  // the same batch as its TokenBought event.
   streamClient.watchEvent({
-    address: [PORTAL, TOKEN],
-    events: [portalEvents.TokenBought, transferEvent],
-    onLogs: async (logs) => handleBuys(logs as Log[]),
+    address: PORTAL,
+    events: [portalEvents.TokenBought],
+    onLogs: async (logs) => {
+      try {
+        await handleBuys(logs as Log[]);
+      } catch (err) {
+        console.error("handleBuys failed:", err);
+      }
+    },
     onError: (err) => console.error("buy stream error:", err),
   });
 

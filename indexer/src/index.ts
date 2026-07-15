@@ -240,14 +240,40 @@ function decode(log: Log<bigint, number, false>): Decoded | null {
  * often call Portal themselves and forward tokens on to the real trader
  * within the same transaction — the LAST Transfer of the token in that tx is
  * the one that's actually verifiable on-chain as "who holds it now."
- * Falls back to Portal's reported address if no Transfer is found.
+ *
+ * Checks the current decoded batch first (cheap, and always sufficient for
+ * backfill, which pulls a whole block range's logs together). Live batches
+ * over a WS subscription often deliver one log per push rather than
+ * grouping a tx's logs together, so this falls back to fetching the
+ * transaction receipt directly — which always has all of that tx's logs —
+ * before giving up and using Portal's reported address.
  */
-function resolveRealTrader(decoded: Decoded[], txHash: string, isBuy: boolean, fallback: string): string {
-  const transfers = decoded.filter((x) => x.name === "token:Transfer" && x.log.transactionHash === txHash);
-  if (transfers.length === 0) return fallback.toLowerCase();
-  const last = transfers.reduce((a, b) => (b.log.logIndex > a.log.logIndex ? b : a));
+async function resolveRealTrader(
+  decoded: Decoded[],
+  txHash: `0x${string}`,
+  isBuy: boolean,
+  fallback: string,
+): Promise<string> {
   const field = isBuy ? "to" : "from";
-  return ((last.args[field] as string) ?? fallback).toLowerCase();
+  const inBatch = decoded.filter((x) => x.name === "token:Transfer" && x.log.transactionHash === txHash);
+  if (inBatch.length > 0) {
+    const last = inBatch.reduce((a, b) => (b.log.logIndex > a.log.logIndex ? b : a));
+    return ((last.args[field] as string) ?? fallback).toLowerCase();
+  }
+
+  try {
+    const receipt = await httpClient.getTransactionReceipt({ hash: txHash });
+    const transferSelector = toEventSelector(transferEvent);
+    const transfers = receipt.logs.filter(
+      (l) => l.address.toLowerCase() === TOKEN && l.topics[0] === transferSelector,
+    );
+    if (transfers.length === 0) return fallback.toLowerCase();
+    const last = transfers.reduce((a, b) => (b.logIndex > a.logIndex ? b : a));
+    const { args } = decodeEventLog({ abi: [transferEvent], data: last.data, topics: last.topics });
+    return ((args as Record<string, unknown>)[field] as string)?.toLowerCase() ?? fallback.toLowerCase();
+  } catch {
+    return fallback.toLowerCase();
+  }
 }
 
 /**
@@ -276,7 +302,7 @@ async function handleLogs(rawLogs: Log<bigint, number, false>[], live: boolean) 
           tx_hash: d.log.transactionHash,
           timestamp: ts,
           round_id: currentRound,
-          trader: resolveRealTrader(decoded, d.log.transactionHash, isBuy, reported),
+          trader: await resolveRealTrader(decoded, d.log.transactionHash, isBuy, reported),
           kind: isBuy ? "buy" : "sell",
           eth_amount: ethAmount.toString(),
           token_amount: (d.args.amount as bigint).toString(),
@@ -378,7 +404,16 @@ function watch() {
 // ---------------------------------------------------------------- main
 
 async function main() {
-  await refreshChainState();
+  // A transient RPC failure here (rate limit, node hiccup) must not crash
+  // the whole process — that's what turned one rate-limit response into a
+  // crash-restart-crash loop, since a fresh process immediately retries the
+  // same call into the same still-active rate limit window. The periodic
+  // poll below will pick chainState up as soon as the RPC recovers.
+  try {
+    await refreshChainState();
+  } catch (err) {
+    console.error("initial state fetch failed, will retry on next poll:", err);
+  }
 
   // Live tracking + periodic broadcasts start immediately — they must NOT
   // wait on backfill. On a fast chain a large backlog can take minutes to
