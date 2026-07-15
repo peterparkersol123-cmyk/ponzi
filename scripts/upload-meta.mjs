@@ -6,11 +6,11 @@
  */
 import { readFile } from "node:fs/promises";
 
-const IMAGE_PATH = "/Users/aske/Downloads/photo_2026-07-13_13-39-16.jpg";
-const CREATOR = "0xeb760402b24a1ee8cc43fbd0820e55ecb711a837";
-const DESCRIPTION = "HOTPOT";
-const WEBSITE = "https://www.hotpotrh.xyz/";
-const TWITTER = "https://x.com/HotpotRH";
+const IMAGE_PATH = "/Users/aske/Downloads/photo_2026-07-14_00-19-31.jpg";
+const CREATOR = "0x44dd1f240a7bdf981935946fbc9c4df589970562";
+const DESCRIPTION = "Last Buyer Wins";
+const WEBSITE = "https://www.lastbuyerwins.xyz/";
+const TWITTER = "https://x.com/lbwrobinhood/status/2076812912526782948?s=20";
 const TELEGRAM = null;
 
 const MUTATION = `
