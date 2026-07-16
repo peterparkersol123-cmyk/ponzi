@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { Geist_Mono, Baloo_2 } from "next/font/google";
-import { NodeNetwork } from "@/components/NodeNetwork";
 import "./globals.css";
 
 const geistMono = Geist_Mono({
@@ -28,10 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistMono.variable} ${baloo.variable} h-full antialiased`}>
-      <body className="min-h-full grid-bg font-mono text-cream">
-        <NodeNetwork />
-        {children}
-      </body>
+      <body className="min-h-full bg-[#05070a] font-mono text-cream">{children}</body>
     </html>
   );
 }

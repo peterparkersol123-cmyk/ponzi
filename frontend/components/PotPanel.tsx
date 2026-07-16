@@ -1,8 +1,10 @@
 "use client";
 
 import { Logo } from "./Logo";
-import { fmtCountdown, fmtEth, fmtUsdCompact, shortAddr } from "@/lib/format";
-import type { ChainState } from "@/lib/useIndexer";
+import { RollingAmount } from "./RollingAmount";
+import { WinnersDropdown } from "./WinnersDropdown";
+import { fmtCountdown, fmtEth, shortAddr } from "@/lib/format";
+import type { ChainState, Payout } from "@/lib/useIndexer";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
 const ROUND_SECONDS = 180; // matches FlapJackpot.ROUND_EXTENSION (3 min)
@@ -48,17 +50,28 @@ function TimerRing({
 /// The hero of the page — a glowing terminal HUD, not a collapsible Panel.
 /// Same window chrome as the data readouts, but scaled up and lit up: this
 /// is the one place the page should feel like a reactor core.
-export function PotPanel({ state, now }: { state: ChainState | null; now: number }) {
+export function PotPanel({ state, now, payouts }: { state: ChainState | null; now: number; payouts: Payout[] }) {
   const remaining = state ? state.deadline - now : 0;
   const roundLive = !!state && state.lastBuyer !== ZERO;
   const expired = roundLive && remaining <= 0;
   const hot = roundLive && !expired && remaining <= 10;
   const tone = expired ? "berry" : hot ? "tangerine" : "hotpot";
   const fraction = roundLive ? remaining / ROUND_SECONDS : 1;
+  const urgent = hot || expired;
+
+  const sectionClass =
+    tone === "berry"
+      ? "border-berry shadow-[0_0_60px_-16px_rgba(255,92,138,0.65)]"
+      : tone === "tangerine"
+        ? "border-tangerine shadow-[0_0_60px_-16px_rgba(255,157,61,0.7)]"
+        : "border-hotpot shadow-[0_0_60px_-16px_rgba(207,242,63,0.55)]";
+  const headerClass = tone === "berry" ? "bg-berry" : tone === "tangerine" ? "bg-tangerine" : "bg-hotpot";
 
   return (
-    <section className="overflow-hidden rounded-2xl border-[2.5px] border-hotpot bg-ink text-cream shadow-[0_0_60px_-16px_rgba(207,242,63,0.55)]">
-      <div className="flex items-center gap-1.5 border-b-[2.5px] border-ink bg-hotpot px-3 py-2">
+    <section
+      className={`overflow-hidden rounded-2xl border-[2.5px] bg-ink/65 text-cream backdrop-blur-sm transition-colors duration-500 ${sectionClass} ${urgent ? "animate-pulse" : ""}`}
+    >
+      <div className={`flex items-center gap-1.5 border-b-[2.5px] border-ink px-3 py-2 transition-colors duration-500 ${headerClass}`}>
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />
@@ -81,11 +94,7 @@ export function PotPanel({ state, now }: { state: ChainState | null; now: number
               state ? "text-berry" : "text-cream/25"
             }`}
           >
-            {state
-              ? state.ethUsd != null
-                ? fmtUsdCompact(state.prizePool, state.ethUsd)
-                : `${fmtEth(state.prizePool)} ETH`
-              : "—"}
+            {state ? <RollingAmount wei={state.prizePool} ethUsd={state.ethUsd} /> : "—"}
           </div>
           {state && (
             <div className="mt-0.5 font-mono text-xs font-semibold text-cream/40">
@@ -128,6 +137,13 @@ export function PotPanel({ state, now }: { state: ChainState | null; now: number
             {roundLive ? shortAddr(state!.lastBuyer) : "—"}
           </span>
         </div>
+
+        <WinnersDropdown
+          rows={payouts.map((p) => ({ id: p.round_id, winner: p.winner, amount: p.amount, timestamp: p.timestamp, txHash: p.tx_hash }))}
+          now={now}
+          roundLabel="round"
+          emptyText="no payouts yet"
+        />
       </div>
     </section>
   );

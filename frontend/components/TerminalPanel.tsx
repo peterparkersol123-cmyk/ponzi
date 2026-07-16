@@ -14,9 +14,9 @@ export function TerminalPanel({
 }) {
   return (
     <section
-      className={`flex flex-col overflow-hidden rounded-2xl border-[2.5px] border-ink bg-ink text-cream shadow-[5px_5px_0_0_var(--ink),0_0_32px_-10px_rgba(207,242,63,0.45)] ${className}`}
+      className={`flex flex-col overflow-hidden rounded-2xl border-[2.5px] border-ink bg-ink/60 text-cream shadow-[5px_5px_0_0_var(--ink),0_0_32px_-10px_rgba(207,242,63,0.45)] backdrop-blur-sm ${className}`}
     >
-      <div className="flex shrink-0 items-center gap-1.5 border-b-[2.5px] border-ink bg-hotpot px-3 py-2">
+      <div className="flex shrink-0 items-center gap-1.5 border-b-[2.5px] border-ink bg-hotpot/80 px-3 py-2 backdrop-blur-sm">
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />

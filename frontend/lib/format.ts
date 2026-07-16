@@ -1,11 +1,18 @@
 import { formatEther } from "viem";
 
+/** Format a plain ETH number (not wei) with sensible precision for its
+ *  magnitude. Split out from fmtEth so animated/interpolated values (which
+ *  are already floats, not wei strings) can share the same formatting rules
+ *  without a lossy round-trip through BigInt. */
+export function fmtEthFromNumber(eth: number, maxDigits = 4): string {
+  if (eth === 0) return "0";
+  if (Math.abs(eth) < 0.0001) return eth.toExponential(2);
+  return eth.toLocaleString("en-US", { maximumFractionDigits: maxDigits });
+}
+
 /** Format a wei string as ETH with sensible precision for its magnitude. */
 export function fmtEth(wei: string | bigint, maxDigits = 4): string {
-  const eth = Number(formatEther(BigInt(wei)));
-  if (eth === 0) return "0";
-  if (eth < 0.0001) return eth.toExponential(2);
-  return eth.toLocaleString("en-US", { maximumFractionDigits: maxDigits });
+  return fmtEthFromNumber(Number(formatEther(BigInt(wei))), maxDigits);
 }
 
 /** Format a wei string as ETH with K/M abbreviation for large values — for
@@ -19,16 +26,22 @@ export function fmtEthCompact(wei: string | bigint): string {
   return eth.toLocaleString("en-US", { maximumFractionDigits: 4 });
 }
 
+/** Format a plain USD number (not wei) with $ + K/M abbreviation — the
+ *  number-input counterpart to fmtUsdCompact, for animated/interpolated
+ *  values that are already floats. */
+export function fmtUsdFromNumber(usd: number): string {
+  if (usd === 0) return "$0";
+  if (Math.abs(usd) >= 1_000_000) return `$${(usd / 1_000_000).toFixed(2)}M`;
+  if (Math.abs(usd) >= 1_000) return `$${(usd / 1_000).toFixed(2)}K`;
+  if (Math.abs(usd) < 0.01) return `$${usd.toFixed(4)}`;
+  return `$${usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+}
+
 /** Format a wei string as USD with $ + K/M abbreviation, given a live
  *  ETH/USD price. This is what "market cap" / "volume" should read as —
  *  the ETH-denominated fallback is only for when the price feed is down. */
 export function fmtUsdCompact(wei: string | bigint, ethUsd: number): string {
-  const usd = Number(formatEther(BigInt(wei))) * ethUsd;
-  if (usd === 0) return "$0";
-  if (usd >= 1_000_000) return `$${(usd / 1_000_000).toFixed(2)}M`;
-  if (usd >= 1_000) return `$${(usd / 1_000).toFixed(2)}K`;
-  if (usd < 0.01) return `$${usd.toFixed(4)}`;
-  return `$${usd.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  return fmtUsdFromNumber(Number(formatEther(BigInt(wei))) * ethUsd);
 }
 
 /** Format a wei string as a USD unit price, given a live ETH/USD rate. Unlike

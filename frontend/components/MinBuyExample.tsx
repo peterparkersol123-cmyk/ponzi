@@ -17,7 +17,7 @@ const EXAMPLE_BANDS = Array.from({ length: 10 }, (_, i) => {
 
 export function MinBuyExample() {
   return (
-    <TerminalPanel title="hotpot / qualify / example" className="h-full" bodyClassName="overflow-y-auto p-3.5">
+    <TerminalPanel title="hotpot / qualify / example" bodyClassName="overflow-y-auto p-3.5">
       <div className="font-mono text-[11px] font-semibold text-cream/45">
         min buy to qualify = $20 × (⌊pot ÷ $100⌋ + 1)
       </div>

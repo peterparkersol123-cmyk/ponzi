@@ -2,7 +2,9 @@
 
 import { useState } from "react";
 import { formatEther } from "viem";
-import { fmtCountdown, fmtEth, fmtUsdCompact } from "@/lib/format";
+import { RollingAmount } from "./RollingAmount";
+import { WinnersDropdown } from "./WinnersDropdown";
+import { fmtCountdown, fmtEth } from "@/lib/format";
 import type { ChainState, LotteryPayout } from "@/lib/useIndexer";
 
 /// Three-node progress tracker for the commit -> reveal -> declare cycle.
@@ -111,14 +113,24 @@ export function LotteryPanel({
   state,
   now,
   latestWinner,
+  payouts,
 }: {
   state: ChainState | null;
   now: number;
   latestWinner: LotteryPayout | null;
+  payouts: LotteryPayout[];
 }) {
+  const urgent = state?.lotteryPhase === "revealed";
+  const sectionClass = urgent
+    ? "border-tangerine shadow-[0_0_60px_-16px_rgba(255,157,61,0.7)]"
+    : "border-hotpot shadow-[0_0_60px_-16px_rgba(207,242,63,0.55)]";
+  const headerClass = urgent ? "bg-tangerine" : "bg-hotpot";
+
   return (
-    <section className="overflow-hidden rounded-2xl border-[2.5px] border-hotpot bg-ink text-cream shadow-[0_0_60px_-16px_rgba(207,242,63,0.55)]">
-      <div className="flex items-center gap-1.5 border-b-[2.5px] border-ink bg-hotpot px-3 py-2">
+    <section
+      className={`overflow-hidden rounded-2xl border-[2.5px] bg-ink/65 text-cream backdrop-blur-sm transition-colors duration-500 ${sectionClass} ${urgent ? "animate-pulse" : ""}`}
+    >
+      <div className={`flex items-center gap-1.5 border-b-[2.5px] border-ink px-3 py-2 transition-colors duration-500 ${headerClass}`}>
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />
@@ -141,11 +153,7 @@ export function LotteryPanel({
               state ? "text-berry" : "text-cream/25"
             }`}
           >
-            {state
-              ? state.ethUsd != null
-                ? fmtUsdCompact(state.lotteryPool, state.ethUsd)
-                : `${fmtEth(state.lotteryPool)} ETH`
-              : "—"}
+            {state ? <RollingAmount wei={state.lotteryPool} ethUsd={state.ethUsd} /> : "—"}
           </div>
           {state && (
             <div className="mt-0.5 font-mono text-xs font-semibold text-cream/40">
@@ -167,6 +175,19 @@ export function LotteryPanel({
         </div>
 
         <OddsCalculator state={state} />
+
+        <WinnersDropdown
+          rows={payouts.map((p) => ({
+            id: p.lottery_round_id,
+            winner: p.winner,
+            amount: p.amount,
+            timestamp: p.timestamp,
+            txHash: p.tx_hash,
+          }))}
+          now={now}
+          roundLabel="draw"
+          emptyText="no draws yet"
+        />
       </div>
     </section>
   );

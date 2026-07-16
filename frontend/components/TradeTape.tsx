@@ -3,9 +3,9 @@
 import { TerminalPanel } from "./TerminalPanel";
 import { explorerUrl } from "@/lib/config";
 import { fmtAge, fmtEth, fmtTokens, shortAddr } from "@/lib/format";
-import type { Trade } from "@/lib/useIndexer";
+import type { ChainState, Trade } from "@/lib/useIndexer";
 
-export function TradeTape({ trades, now }: { trades: Trade[]; now: number }) {
+export function TradeTape({ trades, now, state }: { trades: Trade[]; now: number; state?: ChainState | null }) {
   return (
     <TerminalPanel title="hotpot / trades / tail -f" bodyClassName="overflow-x-auto p-3.5">
       {trades.length === 0 && <div className="py-6 text-center text-xs text-cream/40">no trades yet</div>}
@@ -41,8 +41,11 @@ export function TradeTape({ trades, now }: { trades: Trade[]; now: number }) {
                       </span>
                     )}
                     {buy && t.qualified === false && (
-                      <span title="too small to qualify — still went to the pot" className="ml-1 text-cream/30">
-                        ✗
+                      <span
+                        title="too small to qualify — still went to the pot"
+                        className="ml-1.5 text-[10px] font-semibold text-cream/30"
+                      >
+                        ✗{state?.minBuyUsd != null && ` needed ≈$${state.minBuyUsd.toLocaleString("en-US")}`}
                       </span>
                     )}
                   </td>
