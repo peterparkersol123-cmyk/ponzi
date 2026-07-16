@@ -11,7 +11,7 @@ import {
 } from "viem";
 import { WebSocketServer, WebSocket } from "ws";
 import { jackpotEvents, jackpotReadsAbi, portalEvents, portalReadsAbi, transferEvent } from "./abi.js";
-import { openDb, Store, type TradeRow, type PayoutRow } from "./db.js";
+import { openDb, Store, type TradeRow, type PayoutRow, type LotteryPayoutRow } from "./db.js";
 import { startEthUsdPoller } from "./ethUsd.js";
 import { minQualifyingBuyUsd } from "./qualify.js";
 
@@ -39,6 +39,7 @@ const STATE_POLL_MS = 3_000;
 const HTTP_POLLING_MS = 4_000;
 
 const ONE_BILLION = 1_000_000_000n; // Flap tokens: fixed 1B max supply
+const ZERO_BYTES32 = `0x${"0".repeat(64)}` as `0x${string}`;
 
 function required(name: string): string {
   const v = process.env[name];
@@ -95,6 +96,18 @@ interface ChainState {
   /** USD a buy must be worth right now to reset the countdown / qualify as
    *  last buyer (see qualify.ts) — null until the ETH/USD feed is up. */
   minBuyUsd: number | null;
+
+  // ---- lottery ----
+  lotteryPool: string;
+  lotteryRoundId: number;
+  /** "idle" — no draw in progress, keeper will commit soon.
+   *  "committed" — secret committed, waiting out LOTTERY_INTERVAL before reveal.
+   *  "revealed" — randomness finalized on-chain, waiting for the keeper to
+   *  declare a winner (weighted selection computed off-chain). */
+  lotteryPhase: "idle" | "committed" | "revealed";
+  lotteryCommitTime: number;
+  lotteryRevealTime: number;
+  lotteryIntervalSeconds: number;
 }
 
 let chainState: ChainState | null = null;
@@ -105,16 +118,39 @@ const getEthUsd = startEthUsdPoller();
 
 async function refreshChainState(): Promise<ChainState> {
   const j = { address: JACKPOT, abi: jackpotReadsAbi } as const;
-  const [prizePool, opsAccrued, deadline, lastBuyer, roundId, tokenState] = await Promise.all([
+  const [
+    prizePool,
+    opsAccrued,
+    deadline,
+    lastBuyer,
+    roundId,
+    tokenState,
+    lotteryPool,
+    lotteryRoundId,
+    lotteryCommitment,
+    lotteryCommitTime,
+    lotteryRandomness,
+    lotteryRevealTime,
+    lotteryIntervalSeconds,
+  ] = await Promise.all([
     httpClient.readContract({ ...j, functionName: "prizePool" }),
     httpClient.readContract({ ...j, functionName: "opsAccrued" }),
     httpClient.readContract({ ...j, functionName: "deadline" }),
     httpClient.readContract({ ...j, functionName: "lastBuyer" }),
     httpClient.readContract({ ...j, functionName: "roundId" }),
     httpClient.readContract({ address: PORTAL, abi: portalReadsAbi, functionName: "getTokenV8Safe", args: [TOKEN] }),
+    httpClient.readContract({ ...j, functionName: "lotteryPool" }),
+    httpClient.readContract({ ...j, functionName: "lotteryRoundId" }),
+    httpClient.readContract({ ...j, functionName: "lotteryCommitment" }),
+    httpClient.readContract({ ...j, functionName: "lotteryCommitTime" }),
+    httpClient.readContract({ ...j, functionName: "lotteryRandomness" }),
+    httpClient.readContract({ ...j, functionName: "lotteryRevealTime" }),
+    httpClient.readContract({ ...j, functionName: "LOTTERY_INTERVAL" }),
   ]);
   const ethUsd = getEthUsd();
   const potUsd = ethUsd != null ? Number(formatEther(prizePool)) * ethUsd : null;
+  const lotteryPhase: ChainState["lotteryPhase"] =
+    lotteryRandomness !== ZERO_BYTES32 ? "revealed" : lotteryCommitment !== ZERO_BYTES32 ? "committed" : "idle";
   chainState = {
     prizePool: prizePool.toString(),
     opsAccrued: opsAccrued.toString(),
@@ -130,6 +166,12 @@ async function refreshChainState(): Promise<ChainState> {
     dexed: tokenState.status === 4,
     ethUsd,
     minBuyUsd: potUsd != null ? minQualifyingBuyUsd(potUsd) : null,
+    lotteryPool: lotteryPool.toString(),
+    lotteryRoundId: Number(lotteryRoundId),
+    lotteryPhase,
+    lotteryCommitTime: Number(lotteryCommitTime),
+    lotteryRevealTime: Number(lotteryRevealTime),
+    lotteryIntervalSeconds: Number(lotteryIntervalSeconds),
   };
   return chainState;
 }
@@ -145,6 +187,7 @@ function snapshot() {
     state: chainState,
     trades: store.recentTrades(50),
     payouts: store.recentPayouts(20),
+    lotteryPayouts: store.recentLotteryPayouts(20),
     leaderboard: chainState ? store.roundLeaderboard(chainState.roundId) : [],
     hourlyVolume: store.hourlyVolume(now),
     serverTime: now,
@@ -331,6 +374,21 @@ async function handleLogs(rawLogs: Log<bigint, number, false>[], live: boolean) 
         break;
       }
 
+      case "jackpot:LotteryDrawn": {
+        const lotteryPayout: LotteryPayoutRow = {
+          lottery_round_id: Number(d.args.lotteryRoundId as bigint),
+          winner: (d.args.winner as string).toLowerCase(),
+          amount: (d.args.amount as bigint).toString(),
+          randomness: d.args.randomness as string,
+          block_number: Number(d.log.blockNumber),
+          tx_hash: d.log.transactionHash,
+          timestamp: ts,
+        };
+        store.insertLotteryPayout(lotteryPayout);
+        if (live) broadcast({ type: "lotteryPayout", payout: lotteryPayout });
+        break;
+      }
+
       case "token:Transfer": {
         store.applyTransfer(
           (d.args.from as string).toLowerCase(),
@@ -340,8 +398,9 @@ async function handleLogs(rawLogs: Log<bigint, number, false>[], live: boolean) 
         break;
       }
 
-      // jackpot BuyRecorded / PotFunded / queued / claimed surface through the
-      // periodic state refresh (lastBuyer, deadline, pot are read from chain).
+      // jackpot BuyRecorded / PotFunded / LotteryCommitted / LotteryRevealed /
+      // *Cancelled / queued / claimed surface through the periodic state
+      // refresh (lastBuyer, deadline, pot, lottery phase are read from chain).
     }
   }
 }

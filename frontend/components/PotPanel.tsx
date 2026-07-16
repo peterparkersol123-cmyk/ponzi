@@ -5,7 +5,7 @@ import { fmtCountdown, fmtEth, fmtUsdCompact, shortAddr } from "@/lib/format";
 import type { ChainState } from "@/lib/useIndexer";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
-const ROUND_SECONDS = 60;
+const ROUND_SECONDS = 180; // matches FlapJackpot.ROUND_EXTENSION (3 min)
 
 /// Circular burn-down ring: full circle right after a buy, drains to empty
 /// at the deadline. Radius/stroke tuned to frame the big mm:ss digits.
@@ -63,7 +63,7 @@ export function PotPanel({ state, now }: { state: ChainState | null; now: number
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />
         <span className="ml-1.5 truncate font-mono text-[11px] font-semibold tracking-tight text-ink/65">
-          hotpot / pot / round {state?.roundId ?? "—"}
+          hotpot / last-buyer / round {state?.roundId ?? "—"}
         </span>
       </div>
 

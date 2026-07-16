@@ -22,6 +22,17 @@ export interface ChainState {
   /** USD a buy must be worth right now to qualify as last buyer; null until
    *  the price feed is up. Rises in $20 steps as the pot crosses each $100. */
   minBuyUsd: number | null;
+
+  // ---- lottery ----
+  lotteryPool: string;
+  lotteryRoundId: number;
+  /** "idle" = no draw in progress, "committed" = secret locked in, waiting
+   *  out the interval, "revealed" = randomness finalized on-chain, keeper is
+   *  about to declare a winner. */
+  lotteryPhase: "idle" | "committed" | "revealed";
+  lotteryCommitTime: number;
+  lotteryRevealTime: number;
+  lotteryIntervalSeconds: number;
 }
 
 export interface Trade {
@@ -51,6 +62,16 @@ export interface Payout {
   timestamp: number;
 }
 
+export interface LotteryPayout {
+  lottery_round_id: number;
+  winner: string;
+  amount: string;
+  randomness: string;
+  block_number: number;
+  tx_hash: string;
+  timestamp: number;
+}
+
 export interface LeaderboardEntry {
   trader: string;
   buys: number;
@@ -62,6 +83,7 @@ export interface IndexerData {
   state: ChainState | null;
   trades: Trade[];
   payouts: Payout[];
+  lotteryPayouts: LotteryPayout[];
   leaderboard: LeaderboardEntry[];
   hourlyVolume: string;
   /** serverTime - clientTime, seconds; add to Date.now()/1000 for chain-ish time */
@@ -73,6 +95,7 @@ const initial: IndexerData = {
   state: null,
   trades: [],
   payouts: [],
+  lotteryPayouts: [],
   leaderboard: [],
   hourlyVolume: "0",
   clockOffset: 0,
@@ -102,6 +125,7 @@ export function useIndexer(): IndexerData {
                 state: msg.state,
                 trades: msg.trades,
                 payouts: msg.payouts,
+                lotteryPayouts: msg.lotteryPayouts ?? [],
                 leaderboard: msg.leaderboard,
                 hourlyVolume: msg.hourlyVolume,
                 clockOffset: msg.serverTime - Date.now() / 1000,
@@ -110,6 +134,8 @@ export function useIndexer(): IndexerData {
               return { ...d, trades: [msg.trade, ...d.trades].slice(0, 50) };
             case "payout":
               return { ...d, payouts: [msg.payout, ...d.payouts].slice(0, 20) };
+            case "lotteryPayout":
+              return { ...d, lotteryPayouts: [msg.payout, ...d.lotteryPayouts].slice(0, 20) };
             case "state":
               return {
                 ...d,

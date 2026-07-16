@@ -39,6 +39,16 @@ export function openDb(path: string) {
       timestamp INTEGER NOT NULL
     );
 
+    CREATE TABLE IF NOT EXISTS lottery_payouts (
+      lottery_round_id INTEGER PRIMARY KEY,
+      winner TEXT NOT NULL,
+      amount TEXT NOT NULL,
+      randomness TEXT NOT NULL,
+      block_number INTEGER NOT NULL,
+      tx_hash TEXT NOT NULL,
+      timestamp INTEGER NOT NULL
+    );
+
     CREATE TABLE IF NOT EXISTS meta (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -82,6 +92,16 @@ export interface PayoutRow {
   timestamp: number;
 }
 
+export interface LotteryPayoutRow {
+  lottery_round_id: number;
+  winner: string;
+  amount: string;
+  randomness: string;
+  block_number: number;
+  tx_hash: string;
+  timestamp: number;
+}
+
 export class Store {
   constructor(private db: DatabaseSync) {}
 
@@ -115,6 +135,22 @@ export class Store {
          VALUES (?, ?, ?, ?, ?, ?)`
       )
       .run(p.round_id, p.winner, p.amount, p.block_number, p.tx_hash, p.timestamp);
+  }
+
+  insertLotteryPayout(p: LotteryPayoutRow) {
+    this.db
+      .prepare(
+        `INSERT OR IGNORE INTO lottery_payouts
+         (lottery_round_id, winner, amount, randomness, block_number, tx_hash, timestamp)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(p.lottery_round_id, p.winner, p.amount, p.randomness, p.block_number, p.tx_hash, p.timestamp);
+  }
+
+  recentLotteryPayouts(limit = 20): LotteryPayoutRow[] {
+    return this.db
+      .prepare(`SELECT * FROM lottery_payouts ORDER BY lottery_round_id DESC LIMIT ?`)
+      .all(limit) as unknown as LotteryPayoutRow[];
   }
 
   recentTrades(limit = 50): TradeRow[] {
@@ -206,7 +242,9 @@ export class Store {
     const prev = this.getMeta("jackpot_address");
     if (prev === addr) return false;
     if (prev !== undefined) {
-      this.db.exec("DELETE FROM trades; DELETE FROM payouts; DELETE FROM balances; DELETE FROM meta WHERE key = 'last_block';");
+      this.db.exec(
+        "DELETE FROM trades; DELETE FROM payouts; DELETE FROM lottery_payouts; DELETE FROM balances; DELETE FROM meta WHERE key = 'last_block';"
+      );
     }
     this.setMeta("jackpot_address", addr);
     return prev !== undefined;

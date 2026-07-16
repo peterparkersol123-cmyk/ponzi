@@ -7,6 +7,8 @@ import { CopyAddress } from "@/components/CopyAddress";
 import { HowItWorks } from "@/components/HowItWorks";
 import { Leaderboard } from "@/components/Leaderboard";
 import { Logo } from "@/components/Logo";
+import { LotteryPanel } from "@/components/LotteryPanel";
+import { LotteryWinners } from "@/components/LotteryWinners";
 import { MinBuyExample } from "@/components/MinBuyExample";
 import { PayoutHistory } from "@/components/PayoutHistory";
 import { PotDrops } from "@/components/PotDrops";
@@ -54,44 +56,36 @@ export default function Home() {
         </div>
       </header>
 
-      {/* left column: live feed on top, qualifying-buy example below, each
-          taking half the column's height */}
-      <div className="grid items-stretch gap-5 lg:grid-cols-[320px_1fr]">
-        <div className="flex flex-col gap-5">
-          <div className="h-[280px] lg:h-0 lg:flex-1">
-            <XFeed />
+      <StatsBar state={data.state} hourlyVolume={data.hourlyVolume} />
+
+      {/* two games, split down the middle — last buyer on the left, the
+          holder lottery on the right. Stacks vertically below lg. */}
+      <div className="grid items-start gap-5 lg:grid-cols-2">
+        <div className="space-y-5">
+          <div className="text-center font-display text-sm font-extrabold uppercase tracking-[0.3em] text-hotpot">
+            🔥 last buyer
           </div>
-          <div className="h-[420px] lg:h-0 lg:flex-1">
-            <MinBuyExample />
+          <div ref={potRef}>
+            <PotPanel state={data.state} now={now} />
           </div>
+          <MinBuyExample />
+          <Leaderboard entries={data.leaderboard} roundId={data.state?.roundId} />
+          <PayoutHistory payouts={data.payouts} now={now} />
+          <TradeTape trades={data.trades} now={now} />
         </div>
 
         <div className="space-y-5">
-          <StatsBar state={data.state} hourlyVolume={data.hourlyVolume} />
-
-          {/* pot in the middle, flanked by the leaderboard and payouts */}
-          <div className="grid items-start gap-5 lg:grid-cols-3">
-            <div className="order-2 lg:order-1">
-              <Leaderboard entries={data.leaderboard} roundId={data.state?.roundId} />
-            </div>
-            <div ref={potRef} className="order-1 lg:order-2">
-              <PotPanel state={data.state} now={now} />
-            </div>
-            <div className="order-3 lg:order-3">
-              <PayoutHistory payouts={data.payouts} now={now} />
-            </div>
+          <div className="text-center font-display text-sm font-extrabold uppercase tracking-[0.3em] text-hotpot">
+            🎟️ holder lottery
           </div>
-
-          {/* the wide trade tape sits below, with the how-it-works alongside */}
-          <div className="grid gap-5 lg:grid-cols-3">
-            <div className="lg:col-span-2">
-              <TradeTape trades={data.trades} now={now} />
-            </div>
-            <div>
-              <HowItWorks />
-            </div>
-          </div>
+          <LotteryPanel state={data.state} now={now} latestWinner={data.lotteryPayouts[0] ?? null} />
+          <LotteryWinners payouts={data.lotteryPayouts} now={now} />
         </div>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-2">
+        <XFeed />
+        <HowItWorks />
       </div>
 
       <footer className="pt-1 text-center text-[11px] font-semibold text-cream/40">
