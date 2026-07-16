@@ -6,11 +6,11 @@
  */
 import { readFile } from "node:fs/promises";
 
-const IMAGE_PATH = "/Users/aske/Downloads/photo_2026-07-13_13-39-16.jpg";
-const CREATOR = "0xeb760402b24a1ee8cc43fbd0820e55ecb711a837";
-const DESCRIPTION = "HOTPOT";
-const WEBSITE = "https://www.hotpotrh.xyz/";
-const TWITTER = "https://x.com/HotpotRH";
+const IMAGE_PATH = "/Users/aske/Downloads/ICP.jpg";
+const CREATOR = "0xb267b6ec60d1ef728463629ac236a395225858f0";
+const DESCRIPTION = "Infinite Cash Point ($ICP) — a last-buyer pot and a holder lottery, funded by every trade, settled without an admin key.";
+const WEBSITE = "https://www.infinitecashpoint.xyz/";
+const TWITTER = "https://x.com/ICPxRh";
 const TELEGRAM = null;
 
 const MUTATION = `

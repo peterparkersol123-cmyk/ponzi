@@ -88,9 +88,10 @@ export function WinnersDropdown({
                       <td className="py-1.5 pr-4 text-cream/40">#{r.id}</td>
                       <td className="py-1.5 pr-4">
                         <a
-                          href={explorerUrl ? `${explorerUrl}/tx/${r.txHash}` : undefined}
+                          href={explorerUrl ? `${explorerUrl}/tx/${r.txHash}?tab=internal` : undefined}
                           target="_blank"
                           rel="noreferrer"
+                          title="opens the settlement tx's Internal Txns tab — that's where the winner's ETH actually shows up"
                           className="text-cream/80 hover:text-hotpot hover:underline"
                         >
                           {shortAddr(r.winner)}
@@ -105,6 +106,12 @@ export function WinnersDropdown({
                   ))}
                 </tbody>
               </table>
+            )}
+            {rows.length > 0 && (
+              <p className="mt-3 border-t border-dashed border-cream/10 pt-2 font-mono text-[10px] leading-relaxed text-cream/35">
+                tap a winner to jump straight to their payout — it moves as an internal call from settle(), so we
+                link directly to the <span className="text-cream/50">&quot;Internal Txns&quot;</span> tab
+              </p>
             )}
           </div>
         </div>

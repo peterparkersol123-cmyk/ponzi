@@ -23,22 +23,6 @@ export function NavRail({
 }) {
   return (
     <nav className="flex w-full max-w-md flex-col gap-3">
-      {/* Placeholder for now — no on-site transactions require a wallet yet
-          (buying happens on Flap; only a future failed-payout claim flow
-          would need one). Kept here since it's part of the nav's visual
-          rhythm, wired up once that flow exists. */}
-      <button
-        type="button"
-        className="flex items-center gap-3 text-left opacity-60"
-        title="wallet connect — not needed yet, buying happens on Flap"
-      >
-        <span className="h-3 w-3 shrink-0 rounded-full bg-cream/20" />
-        <span className="flex flex-1 items-center justify-between rounded-full border-2 border-cream/15 px-5 py-2.5 font-display text-sm font-extrabold uppercase tracking-widest text-cream/50">
-          connect
-          <span aria-hidden>▾</span>
-        </span>
-      </button>
-
       <a href={buyUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3">
         <span className="h-3 w-3 shrink-0 rounded-full bg-hotpot shadow-[0_0_10px_2px_rgba(207,242,63,0.6)]" />
         <span className="flex-1 rounded-full border-2 border-hotpot bg-hotpot px-5 py-3 text-center font-display text-sm font-extrabold uppercase tracking-widest text-ink shadow-[0_0_25px_-4px_rgba(207,242,63,0.9)] transition-transform hover:scale-[1.02]">

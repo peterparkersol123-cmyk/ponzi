@@ -15,7 +15,7 @@ const baloo = Baloo_2({
 });
 
 export const metadata: Metadata = {
-  title: "HOTPOT — last buyer wins",
+  title: "Infinite Cash Point ($ICP) — last buyer wins",
   description:
     "A jackpot token on Flap: every buy resets the countdown, the last buyer takes the pot.",
 };

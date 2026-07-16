@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 
-const STORAGE_KEY = "hotpot:soundEnabled";
+const STORAGE_KEY = "icp:soundEnabled";
 
 /** Sound is opt-in and remembered per-browser — defaults off so the page
  *  never makes noise on a first, unexpected visit. */

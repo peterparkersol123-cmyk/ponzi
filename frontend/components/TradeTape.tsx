@@ -7,7 +7,7 @@ import type { ChainState, Trade } from "@/lib/useIndexer";
 
 export function TradeTape({ trades, now, state }: { trades: Trade[]; now: number; state?: ChainState | null }) {
   return (
-    <TerminalPanel title="hotpot / trades / tail -f" bodyClassName="overflow-x-auto p-3.5">
+    <TerminalPanel title="icp / trades / tail -f" bodyClassName="overflow-x-auto p-3.5">
       {trades.length === 0 && <div className="py-6 text-center text-xs text-cream/40">no trades yet</div>}
       {trades.length > 0 && (
         <table className="w-full whitespace-nowrap text-left font-mono text-[12.5px] tabular-nums">

@@ -135,7 +135,7 @@ export function LotteryPanel({
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />
         <span className="ml-1.5 truncate font-mono text-[11px] font-semibold tracking-tight text-ink/65">
-          hotpot / lottery / draw {state?.lotteryRoundId ?? "—"}
+          icp / lottery / draw {state?.lotteryRoundId ?? "—"}
         </span>
       </div>
 

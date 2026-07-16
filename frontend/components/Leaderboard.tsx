@@ -10,7 +10,7 @@ export function Leaderboard({ entries, roundId }: { entries: LeaderboardEntry[];
   const maxIn = Math.max(1, ...entries.map((e) => Number(e.ethIn)));
 
   return (
-    <TerminalPanel title={`hotpot / cooks / round ${roundId ?? "—"}`}>
+    <TerminalPanel title={`icp / cooks / round ${roundId ?? "—"}`}>
       {entries.length === 0 && (
         <div className="py-6 text-center text-xs text-cream/40">nobody at the pot yet</div>
       )}

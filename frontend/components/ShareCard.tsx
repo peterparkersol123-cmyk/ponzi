@@ -34,7 +34,7 @@ export function ShareCard({
 
     ctx.fillStyle = "#cff23f";
     ctx.font = "bold 48px monospace";
-    ctx.fillText(kind === "lotteryPayout" ? "LOTTERY WINNER" : "HOTPOT WON", canvas.width / 2, 170);
+    ctx.fillText(kind === "lotteryPayout" ? "LOTTERY WINNER" : "POT WON", canvas.width / 2, 170);
 
     ctx.fillStyle = "#fffdf3";
     ctx.font = "bold 96px monospace";
@@ -47,12 +47,12 @@ export function ShareCard({
 
     ctx.font = "bold 34px monospace";
     ctx.fillStyle = "#cff23f";
-    ctx.fillText("$HOTPOT", canvas.width / 2, 560);
+    ctx.fillText("$ICP", canvas.width / 2, 560);
 
     const url = canvas.toDataURL("image/png");
     const a = document.createElement("a");
     a.href = url;
-    a.download = `hotpot-win-${kind === "lotteryPayout" ? "lottery" : "pot"}-${roundId}.png`;
+    a.download = `icp-win-${kind === "lotteryPayout" ? "lottery" : "pot"}-${roundId}.png`;
     a.click();
   }
 

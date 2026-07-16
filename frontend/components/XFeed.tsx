@@ -12,19 +12,22 @@ declare global {
   }
 }
 
-const HANDLE = "HotpotRH";
+const HANDLE = "ICPxRh";
 const PROFILE_URL = `https://x.com/${HANDLE}`;
 
-/** Real, live feed — X's official embedded-timeline widget for @HotpotRH.
- *  No API key needed (it's X's public embed), but the tweets themselves
- *  render inside X's own iframe/chrome, only themed dark to blend in.
- *  Falls back to a "view on X" card if the widget is slow, blocked by the
- *  viewer's browser, or the account has no posts yet — never a dead box. */
+/** Real, live feed — X's official embedded-timeline widget for the
+ *  configured HANDLE. No API key needed (it's X's public embed), but the
+ *  tweets themselves render inside X's own iframe/chrome, only themed dark
+ *  to blend in. Falls back to a "view on X" card if the widget is slow,
+ *  blocked by the viewer's browser, or the account has no posts yet — and to
+ *  a "coming soon" placeholder entirely if no HANDLE is set yet. */
 export function XFeed() {
   const hostRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "loaded" | "timeout">("loading");
 
   useEffect(() => {
+    if (!HANDLE) return;
+
     const verify = () => {
       const ok = [...(hostRef.current?.querySelectorAll("iframe") ?? [])].some(
         (f) => f.offsetWidth > 0 && f.offsetHeight > 0,
@@ -57,8 +60,18 @@ export function XFeed() {
     return () => clearTimeout(timeout);
   }, []);
 
+  if (!HANDLE) {
+    return (
+      <TerminalPanel title="icp / x / —" className="h-full" bodyClassName="overflow-hidden p-0">
+        <div className="grid h-full place-items-center px-6 text-center">
+          <p className="font-mono text-xs text-cream/40">no X account yet — check back soon</p>
+        </div>
+      </TerminalPanel>
+    );
+  }
+
   return (
-    <TerminalPanel title={`hotpot / x / @${HANDLE}`} className="h-full" bodyClassName="overflow-hidden p-0">
+    <TerminalPanel title={`icp / x / @${HANDLE}`} className="h-full" bodyClassName="overflow-hidden p-0">
       <div className="flex items-center gap-1.5 border-b border-cream/10 px-3.5 py-2 text-[10px] uppercase tracking-wider text-cream/40">
         <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-berry" />
         live from x.com/{HANDLE}

@@ -53,12 +53,15 @@ export default function Home() {
       <div className="relative z-10 mx-auto flex max-w-[1500px] flex-col-reverse gap-10 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1 space-y-8">
           <div className="flex items-center gap-3">
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border-[3px] border-ink bg-hotpot shadow-[3px_3px_0_0_var(--ink)]">
-              <Logo className="h-7 w-7 text-ink" />
+            <div className="h-11 w-11 shrink-0 overflow-hidden rounded-2xl border-[3px] border-ink shadow-[3px_3px_0_0_var(--ink)]">
+              <Logo className="h-full w-full" />
             </div>
             <h1 className="font-display text-2xl font-extrabold uppercase leading-none tracking-tight text-cream">
-              Hotpot
+              Infinite Cash Point
             </h1>
+            <span className="rounded-full border-2 border-cream/15 px-2 py-0.5 font-mono text-[10px] font-bold text-cream/50">
+              $ICP
+            </span>
             <span
               className={`ml-2 inline-flex items-center gap-1.5 rounded-full border-2 border-cream/15 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
                 data.connected ? "text-cream/60" : "text-cream/30"
@@ -75,7 +78,7 @@ export default function Home() {
               <div className="relative grid grid-cols-1 gap-10 lg:grid-cols-2">
                 <div className="space-y-5">
                   <StatusReadout
-                    label="hotpot"
+                    label="pot"
                     time={roundLive ? fmtCountdown(Math.max(0, remaining)) : "--:--"}
                     banner={
                       !roundLive

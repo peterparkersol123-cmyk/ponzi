@@ -59,6 +59,8 @@ export function PotPanel({ state, now, payouts }: { state: ChainState | null; no
   const fraction = roundLive ? remaining / ROUND_SECONDS : 1;
   const urgent = hot || expired;
 
+  const halfWei = state ? (BigInt(state.prizePool) / 2n).toString() : "0";
+
   const sectionClass =
     tone === "berry"
       ? "border-berry shadow-[0_0_60px_-16px_rgba(255,92,138,0.65)]"
@@ -76,29 +78,38 @@ export function PotPanel({ state, now, payouts }: { state: ChainState | null; no
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />
         <span className="h-2.5 w-2.5 rounded-full bg-ink/35" />
         <span className="ml-1.5 truncate font-mono text-[11px] font-semibold tracking-tight text-ink/65">
-          hotpot / last-buyer / round {state?.roundId ?? "—"}
+          icp / last-buyer / round {state?.roundId ?? "—"}
         </span>
       </div>
 
       <div className="space-y-5 px-5 pb-7 pt-6 text-center">
-        <div className="pot-bob mx-auto grid h-16 w-16 place-items-center rounded-full border-[3px] border-hotpot bg-ink shadow-[0_0_24px_-4px_rgba(207,242,63,0.7)]">
-          <Logo className="h-9 w-9 text-hotpot" />
+        <div className="pot-bob mx-auto h-16 w-16 overflow-hidden rounded-full border-[3px] border-hotpot shadow-[0_0_24px_-4px_rgba(207,242,63,0.7)]">
+          <Logo className="h-full w-full" />
         </div>
 
         <div>
           <div className="font-display text-xs font-bold uppercase tracking-[0.25em] text-cream/45">
-            The pot
+            Up for grabs right now
           </div>
           <div
             className={`neon-text mt-1 font-display text-5xl font-extrabold leading-none tracking-tight ${
               state ? "text-berry" : "text-cream/25"
             }`}
           >
-            {state ? <RollingAmount wei={state.prizePool} ethUsd={state.ethUsd} /> : "—"}
+            {state ? <RollingAmount wei={halfWei} ethUsd={state.ethUsd} /> : "—"}
           </div>
           {state && (
-            <div className="mt-0.5 font-mono text-xs font-semibold text-cream/40">
-              {fmtEth(state.prizePool)} ETH
+            <div className="mt-0.5 font-mono text-xs font-semibold text-cream/40">{fmtEth(halfWei)} ETH</div>
+          )}
+          {state && (
+            <div className="mt-1.5 flex flex-col items-center gap-1">
+              <span className="font-mono text-[10px] leading-relaxed text-cream/45">
+                🌱 win this now, or it seeds the next round — settle() always splits the vault right down the
+                middle
+              </span>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-cream/15 px-2.5 py-1 font-mono text-[10px] font-semibold text-cream/35">
+                vault total <RollingAmount wei={state.prizePool} ethUsd={state.ethUsd} />
+              </span>
             </div>
           )}
           {state?.minBuyUsd != null && (
