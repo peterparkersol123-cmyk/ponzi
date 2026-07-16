@@ -13,8 +13,11 @@ import {IFlapPortalLauncher} from "../src/interfaces/IFlapPortal.sol";
 ///   3. call Portal.newTokenV6 launching a TOKEN_TAXED_V3 with the jackpot as
 ///      the sole tax beneficiary (mktBps = 10000)
 ///
-/// After this, every trade's tax flows to the jackpot (75% pot / 25% ops) and
-/// buys routed through FlapJackpot.buy() drive the countdown. No admin anywhere.
+/// After this, every trade's tax flows to the jackpot and splits three ways:
+/// 37.5% to the last-buyer prize pool, 37.5% to the holder lottery pool, 25% to
+/// ops. The keeper bot (indexer/src/keeper.ts) watches real buys to drive the
+/// last-buyer countdown and runs the lottery's commit/reveal/declare cycle. No
+/// admin anywhere.
 ///
 /// Env:
 ///   OPS_ADDRESS    required — immutable destination of the ops fee share

@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import {
   createPublicClient,
   createWalletClient,
@@ -5,17 +6,20 @@ import {
   defineChain,
   formatEther,
   http,
+  keccak256,
   toEventSelector,
   webSocket,
   type Log,
   type PublicClient,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { jackpotWritesAbi, portalEvents, transferEvent } from "./abi.js";
+import { jackpotWritesAbi, portalEvents, portalReadsAbi, transferEvent } from "./abi.js";
 import { startEthUsdPoller } from "./ethUsd.js";
+import { BalanceTracker } from "./lotteryBalances.js";
 import { minQualifyingBuyUsd } from "./qualify.js";
 
 const TRANSFER_SELECTOR = toEventSelector(transferEvent);
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 /// The keeper is the game's referee. It watches Flap's Portal for buys of the
 /// token and records the latest buyer on-chain (resetting the 60s countdown),
@@ -47,6 +51,16 @@ const GAS_PRIORITY_MULTIPLIER = Number(process.env.GAS_PRIORITY_MULTIPLIER ?? 3)
 // Only used as a fallback when WS_RPC_URL isn't set. With WS configured
 // (as it should be), buy detection is push-based and this barely matters.
 const HTTP_POLLING_MS = 4_000;
+// Same cadence as the settle loop — cheap reads, no reason to check more often
+// than the lottery's own LOTTERY_INTERVAL requires.
+const LOTTERY_POLL_MS = Number(process.env.LOTTERY_POLL_MS ?? 3_000);
+// Where the balance tracker's Transfer backfill starts — should match the
+// indexer's START_BLOCK (the token's launch block) so lottery eligibility
+// reflects true holdings, not just recent activity.
+const START_BLOCK = BigInt(process.env.START_BLOCK ?? "0");
+// Alchemy's free tier caps eth_getLogs at a 10-block range; see the indexer's
+// identical BACKFILL_CHUNK for the same reasoning.
+const LOTTERY_BACKFILL_CHUNK = BigInt(process.env.LOTTERY_BACKFILL_CHUNK ?? "10");
 
 function required(name: string): string {
   const v = process.env[name];
@@ -71,8 +85,9 @@ const streamClient: PublicClient = WS_RPC_URL
   : publicClient;
 const wallet = createWalletClient({ account, chain, transport: http(RPC_URL) });
 const getEthUsd = startEthUsdPoller();
+const balances = new BalanceTracker(publicClient, streamClient, TOKEN, START_BLOCK, LOTTERY_BACKFILL_CHUNK);
 
-// Serialize writes so nonces never collide (recordBuy vs settle).
+// Serialize writes so nonces never collide (recordBuy vs settle vs lottery steps).
 let queue: Promise<void> = Promise.resolve();
 function enqueue(fn: () => Promise<void>) {
   queue = queue.then(fn).catch((err) => console.error("keeper tx failed:", err?.shortMessage ?? err));
@@ -220,7 +235,7 @@ async function settleLoop() {
       publicClient.readContract({ address: JACKPOT, abi: jackpotWritesAbi, functionName: "lastBuyer" }),
     ]);
     const now = BigInt(Math.floor(Date.now() / 1000));
-    if (lastBuyer !== "0x0000000000000000000000000000000000000000" && deadline > 0n && now > deadline) {
+    if (lastBuyer !== ZERO_ADDRESS && deadline > 0n && now > deadline) {
       enqueue(settle);
     }
   } catch (err) {
@@ -228,8 +243,145 @@ async function settleLoop() {
   }
 }
 
+// ---------------------------------------------------------------- lottery cycle
+
+const ZERO_BYTES32 = `0x${"0".repeat(64)}` as `0x${string}`;
+
+/**
+ * The secret lives only in memory between commit and reveal. If the keeper
+ * restarts mid-cycle (deploy, crash), it's lost and this draw stalls —
+ * recoverable via the contract's permissionless cancelStaleLotteryCommitment()
+ * after COMMITMENT_TIMEOUT, at which point a fresh cycle starts. No funds are
+ * ever at risk from this, only the availability of that one draw.
+ */
+let pendingSecret: `0x${string}` | null = null;
+// Guards against piling up duplicate lottery actions across poll ticks that
+// fire before the previous action's on-chain effect is visible yet.
+let lotteryActionInFlight = false;
+let lotteryIntervalSeconds = 600n; // overwritten from the contract at startup
+
+async function commitLotteryCycle() {
+  const secret = `0x${randomBytes(32).toString("hex")}` as `0x${string}`;
+  const commitment = keccak256(secret);
+  pendingSecret = secret;
+  const hash = await wallet.writeContract({
+    address: JACKPOT,
+    abi: jackpotWritesAbi,
+    functionName: "commitLottery",
+    args: [commitment],
+    ...(await urgentFees()),
+  });
+  await publicClient.waitForTransactionReceipt({ hash });
+  console.log(`commitLottery(${commitment}) — ${hash}`);
+}
+
+async function revealLotteryCycle() {
+  if (pendingSecret == null) {
+    console.error("no pending lottery secret in memory (keeper likely restarted mid-cycle) — " +
+      "waiting for permissionless stale-commitment recovery instead of guessing");
+    return;
+  }
+  const secret = pendingSecret;
+  const hash = await wallet.writeContract({
+    address: JACKPOT,
+    abi: jackpotWritesAbi,
+    functionName: "revealLottery",
+    args: [secret],
+    ...(await urgentFees()),
+  });
+  await publicClient.waitForTransactionReceipt({ hash });
+  console.log(`revealLottery — ${hash}`);
+  pendingSecret = null;
+}
+
+async function declareLotteryWinnerCycle() {
+  if (!balances.isReady()) {
+    console.log("balance tracker still backfilling — deferring lottery winner declaration");
+    return;
+  }
+  const randomness = await publicClient.readContract({
+    address: JACKPOT,
+    abi: jackpotWritesAbi,
+    functionName: "lotteryRandomness",
+  });
+
+  let pool: `0x${string}` = ZERO_ADDRESS as `0x${string}`;
+  try {
+    const state = await publicClient.readContract({
+      address: PORTAL,
+      abi: portalReadsAbi,
+      functionName: "getTokenV8Safe",
+      args: [TOKEN],
+    });
+    pool = state.pool;
+  } catch (err) {
+    console.error("could not read DEX pool address for lottery exclusion, proceeding without it:", err);
+  }
+  const excluded = new Set([PORTAL.toLowerCase(), JACKPOT.toLowerCase(), pool.toLowerCase()]);
+
+  const winner = balances.pickWinner(randomness, excluded);
+  if (winner == null) {
+    console.error("no eligible lottery holders found this cycle — skipping declare");
+    return;
+  }
+
+  const hash = await wallet.writeContract({
+    address: JACKPOT,
+    abi: jackpotWritesAbi,
+    functionName: "declareLotteryWinner",
+    args: [winner],
+    ...(await urgentFees()),
+  });
+  await publicClient.waitForTransactionReceipt({ hash });
+  console.log(`declareLotteryWinner(${winner}) randomness=${randomness} — ${hash}`);
+}
+
+async function lotteryLoop() {
+  if (!balances.isReady() || lotteryActionInFlight) return;
+  try {
+    const [commitment, commitTime, randomness] = await Promise.all([
+      publicClient.readContract({ address: JACKPOT, abi: jackpotWritesAbi, functionName: "lotteryCommitment" }),
+      publicClient.readContract({ address: JACKPOT, abi: jackpotWritesAbi, functionName: "lotteryCommitTime" }),
+      publicClient.readContract({ address: JACKPOT, abi: jackpotWritesAbi, functionName: "lotteryRandomness" }),
+    ]);
+    const now = BigInt(Math.floor(Date.now() / 1000));
+
+    let action: (() => Promise<void>) | null = null;
+    if (randomness !== ZERO_BYTES32) {
+      action = declareLotteryWinnerCycle;
+    } else if (commitment !== ZERO_BYTES32) {
+      if (now >= commitTime + lotteryIntervalSeconds) action = revealLotteryCycle;
+    } else {
+      action = commitLotteryCycle;
+    }
+
+    if (action) {
+      lotteryActionInFlight = true;
+      enqueue(async () => {
+        try {
+          await action!();
+        } finally {
+          lotteryActionInFlight = false;
+        }
+      });
+    }
+  } catch (err) {
+    console.error("lottery poll failed:", err);
+  }
+}
+
 async function main() {
   console.log(`Keeper ${account.address} watching Portal ${PORTAL} for buys of ${TOKEN}`);
+
+  try {
+    lotteryIntervalSeconds = await publicClient.readContract({
+      address: JACKPOT,
+      abi: jackpotWritesAbi,
+      functionName: "LOTTERY_INTERVAL",
+    });
+  } catch (err) {
+    console.error("could not read LOTTERY_INTERVAL from contract, using default 600s:", err);
+  }
 
   streamClient.watchEvent({
     address: PORTAL,
@@ -245,6 +397,12 @@ async function main() {
   });
 
   setInterval(settleLoop, SETTLE_POLL_MS);
+  setInterval(lotteryLoop, LOTTERY_POLL_MS);
+
+  // Balance tracking (needed for weighted lottery winner selection) runs in
+  // the background — its backfill must not delay recordBuy/settle coming
+  // online. The lottery loop already checks isReady() before acting.
+  balances.start().catch((err) => console.error("balance tracker failed to start:", err));
 }
 
 main().catch((err) => {
